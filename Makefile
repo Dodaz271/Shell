@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -g -Wall
-SRCMODULES = read_commands.c
+SRCMODULES = read_commands.c commands_execution.c
 OBJMODULES = $(SRCMODULES:.c=.o)
 
 %.o: %.c %.h

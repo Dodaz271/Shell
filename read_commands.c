@@ -19,9 +19,6 @@ char *newArray(char *str, int n, int arr_size)
     int i;
     for(i = 0; i < n; i++) {
         newArray[i] = str[i];
-	/*if(str[i] == '\0') {
-	    break;
-	}*/
     }
     free(str);
     return newArray;
@@ -35,7 +32,11 @@ void add_node(struct word_item **first, const char *str)
         return;
     }
     struct word_item *last;
-    newNode->word = strdup(str);
+    if(str != NULL) {
+        newNode->word = strdup(str);
+    } else {
+        newNode->word = NULL;
+    }
     newNode->next = NULL;
     if(*first == NULL) {
         *first = newNode;
@@ -62,23 +63,45 @@ void print_commands(struct word_item **commands)
 
 char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *count, struct word_item **commands)
 {
-    if((str != NULL) && (*flag == false) && ((c == '\n') || (c == ' '))) {
-        add_node(commands, str);
+    if((((str != NULL) && (str[*n-1] != '\\')) || (str == NULL)) && (c == '"')) {
+        *flag = !(*flag);
+	if((str == NULL) && (*flag == false)) {
+	    add_node(commands, NULL);
+	    free(str);
+	    str = NULL;
+	}
+	return str;
+    }
+    if((*flag == false) && ((c == '\n') || (c == ' ') || (c == '\t'))) {
+	if(str != NULL) {
+	    if((*n > 1) && (str[*n-2] == '\\') && (str[*n-1] == '\\')) {
+                str[*n-1] = '\0';
+	    }
+            add_node(commands, str);
+	    (*count)++;
+	}
 	*n = 0;
 	*arr_size = 2;
-	(*count)++;
 	free(str);
 	return NULL; //str = NULL
     }
-    if(str == NULL) {
-        str = (char*)malloc(2 * sizeof(char));
+    if(c != '\n') {
+        if(str == NULL) {
+            str = (char*)malloc(2 * sizeof(char));
+        }
+        if((*arr_size - *n) == 1) {
+	    *arr_size *= 2;
+            str = newArray(str, *n, *arr_size);
+        }
+	if((str[*n-1] == '\\') && (c != '\\')) {
+	    (*n)--;
+	}
+	if((*n > 1) && (str[*n-2] == '\\') && (str[*n-1] == '\\')) {
+	    (*n)--;
+	}
+        str[*n] = c;
+        str[*n + 1] = '\0';
+        (*n)++;
     }
-    if((*arr_size - *n) == 1) {
-	*arr_size *= 2;
-        str = newArray(str, *n, *arr_size);
-    }
-    str[*n] = c;
-    str[*n + 1] = '\0';
-    (*n)++;
     return str;
 }
