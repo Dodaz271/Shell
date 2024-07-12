@@ -1,5 +1,33 @@
 #include "read_commands.h"
 
+bool separators(char c, char *str, int *n, bool *is_ampersand, bool flag)
+{
+    if((c == '\n') || (c == ' ') || (c == '\t')) {
+	if((!flag) && (str != NULL) && (strcmp(str, "&") == 0)) {
+            *is_ampersand = true;
+        }
+        return true;
+    }
+    if(str != NULL) {
+	if(((strcmp(str, "&") == 0) && (c == '&')) || ((strcmp(str, ">") == 0) && (c == '>')) || ((strcmp(str, "|") == 0) && (c == '|'))) {
+	    if(*n < 1) {
+	        (*n)++;
+	    }
+	    return false;
+	}
+	const char *separators[] = {"&", "&&", ">", "<", ">>", "|", "||", ";", "(", ")"};
+        for (int i = 0; i < 10; i++) {
+            if (strcmp(str, separators[i]) == 0) {
+                return true;
+            }
+        }
+        if((c == '&') || (c == '>') || (c == '<') || (c == '|') || (c == ';') || (c == '(') || (c == ')')) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void delete_commands(struct word_item *commands)
 {
     struct word_item *current = commands; 
@@ -61,7 +89,7 @@ void print_commands(struct word_item **commands)
 
 }
 
-char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *count, struct word_item **commands)
+char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *count, struct word_item **commands, bool *is_ampersand)
 {
     if((((str != NULL) && (str[*n-1] != '\\')) || (str == NULL)) && (c == '"')) {
         *flag = !(*flag);
@@ -71,8 +99,8 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	    str = NULL;
 	}
 	return str;
-    }
-    if((*flag == false) && ((c == '\n') || (c == ' ') || (c == '\t'))) {
+    } 
+    if((*flag == false) && (separators(c, str, n, is_ampersand, *flag))) {
 	if(str != NULL) {
 	    if((*n > 1) && (str[*n-2] == '\\') && (str[*n-1] == '\\')) {
                 str[*n-1] = '\0';
@@ -83,7 +111,14 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	*n = 0;
 	*arr_size = 2;
 	free(str);
-	return NULL; //str = NULL
+	str = NULL;
+	if(((c != ' ') && (c != '\n') && (c != '\t') && (separators(c, str, n, is_ampersand, *flag))) || (!separators(c, str, n, is_ampersand, *flag))) {
+	    str = (char*)malloc(2 * sizeof(char));
+	    str[0] = c;
+	    str[1] = '\0';
+	    (*n)++;
+	}
+	return str;//NULL; //str = NULL
     }
     if(c != '\n') {
         if(str == NULL) {

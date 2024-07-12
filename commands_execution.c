@@ -12,30 +12,44 @@ void change_dir(char **arr_commands)
 	    perror("getenv");
 	}
         chdir(home);
-	free(home);
 	return;
     }
-    chdir(arr_commands[1]);
+    if(chdir(arr_commands[1]) != 0) {
+        perror("cd");
+    }
     return;
 }
 
-void exec_command(char **arr_commands)
+void exec_command(char **arr_commands, bool is_ampersand, int count/*, int pid, int bg_pid*/)
 {
     int pid;
+    if(is_ampersand) {
+        arr_commands[count-1] = NULL;
+	/*if(pid != -1) {
+	    do {
+                p = wait(NULL);
+            } while(p != bg_pid);
+	}*/
+    }
     if(strcmp(arr_commands[0], "cd") == 0) {
         change_dir(arr_commands);
-	return;
+	return;// -1;
     }
     pid = fork();
     if(pid == -1) {
         perror("fork");
-	return;
+	return;// -1;
     }
     if(pid == 0) {
         execvp(arr_commands[0], arr_commands);
 	perror(arr_commands[0]);
-	return;
+	exit(0);//return;
     }
-    wait(NULL);
-    return;
+    if(!is_ampersand) {
+        wait(NULL);
+	return; //-1;
+    }/* else {
+        printf("Process running in background with PID %d\n", pid);
+    }*/
+    return; //pid;
 }
