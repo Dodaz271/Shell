@@ -2,9 +2,6 @@
 
 bool separators(char c, char *str, int *n, bool *is_ampersand, bool flag)
 {
-    /*if((!flag) && (str != NULL) && (strcmp(str, "&") == 0)) {
-        *is_ampersand = true;
-    }*/
     if((c == '\n') || (c == ' ') || (c == '\t')) {
 	if((!flag) && (str != NULL) && (strcmp(str, "&") == 0)) {
             *is_ampersand = true;

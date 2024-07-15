@@ -65,7 +65,9 @@ int main()
             }
 	    *flag = false;
 	    printf("Count: %d\nIs_ampersand: %s\n", *count, *is_ampersand ? "true" : "false");
-	    arr_commands = command_array(commands, *count, *is_ampersand);
+	    if(commands) {
+	        arr_commands = command_array(commands, *count, *is_ampersand);
+	    }
 	    if(arr_commands) {
 	        exec_command(arr_commands, *is_ampersand, *count);
 	    } else {
