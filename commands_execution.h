@@ -7,5 +7,5 @@
 
 
 void change_dir(char **arr_commands);
-/*int */void exec_command(char **arr_commands, bool is_ampersand, int count/*, int pid, int bg_pid*/);
+void exec_command(char **arr_commands, bool is_ampersand, int count);
 

@@ -2,13 +2,16 @@
 
 bool separators(char c, char *str, int *n, bool *is_ampersand, bool flag)
 {
+    /*if((!flag) && (str != NULL) && (strcmp(str, "&") == 0)) {
+        *is_ampersand = true;
+    }*/
     if((c == '\n') || (c == ' ') || (c == '\t')) {
 	if((!flag) && (str != NULL) && (strcmp(str, "&") == 0)) {
             *is_ampersand = true;
         }
         return true;
     }
-    if(str != NULL) {
+    if((str != NULL) && (!flag)) {
 	if(((strcmp(str, "&") == 0) && (c == '&')) || ((strcmp(str, ">") == 0) && (c == '>')) || ((strcmp(str, "|") == 0) && (c == '|'))) {
 	    if(*n < 1) {
 	        (*n)++;
@@ -98,12 +101,23 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	    free(str);
 	    str = NULL;
 	}
+	if((str != NULL) && (strcmp(str, "&") == 0) && (c == '"')) {
+	    if((*arr_size - *n) == 1) {
+                *arr_size *= 2;
+                str = newArray(str, *n, *arr_size);
+            }
+	    str[*n] = '"';
+	    str[*n+1] = '\0';
+	}
 	return str;
     } 
     if((*flag == false) && (separators(c, str, n, is_ampersand, *flag))) {
 	if(str != NULL) {
 	    if((*n > 1) && (str[*n-2] == '\\') && (str[*n-1] == '\\')) {
                 str[*n-1] = '\0';
+	    }
+	    if((str != NULL) && (strcmp(str, "&\"") == 0)) {
+	        str[*n] = '\0';
 	    }
             add_node(commands, str);
 	    (*count)++;
@@ -118,7 +132,7 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	    str[1] = '\0';
 	    (*n)++;
 	}
-	return str;//NULL; //str = NULL
+	return str;
     }
     if(c != '\n') {
         if(str == NULL) {

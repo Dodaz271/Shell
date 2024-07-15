@@ -20,36 +20,33 @@ void change_dir(char **arr_commands)
     return;
 }
 
-void exec_command(char **arr_commands, bool is_ampersand, int count/*, int pid, int bg_pid*/)
+void exec_command(char **arr_commands, bool is_ampersand, int count)
 {
-    int pid;
+    int pid, p;
     if(is_ampersand) {
         arr_commands[count-1] = NULL;
-	/*if(pid != -1) {
-	    do {
-                p = wait(NULL);
-            } while(p != bg_pid);
-	}*/
     }
     if(strcmp(arr_commands[0], "cd") == 0) {
         change_dir(arr_commands);
-	return;// -1;
+	return;
     }
-    pid = fork();
+    pid = fork(); 
     if(pid == -1) {
         perror("fork");
-	return;// -1;
+	return;
     }
     if(pid == 0) {
         execvp(arr_commands[0], arr_commands);
 	perror(arr_commands[0]);
-	exit(0);//return;
+	exit(0);
     }
     if(!is_ampersand) {
-        wait(NULL);
-	return; //-1;
-    }/* else {
+        do {
+            p = wait(NULL);
+        } while(p != pid);
+	return;
+    } else {
         printf("Process running in background with PID %d\n", pid);
-    }*/
-    return; //pid;
+    }
+    return;
 }
