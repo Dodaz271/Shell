@@ -67,11 +67,11 @@ int main()
 	    printf("Count: %d\nIs_ampersand: %s\n", *count, *is_ampersand ? "true" : "false");
 	    if(commands) {
 	        arr_commands = command_array(commands, *count, *is_ampersand);
-	    }
-	    if(arr_commands) {
-	        exec_command(arr_commands, *is_ampersand, *count);
-	    } else {
-	        printf("Error: ampersand is not last significant symbol\n");
+	        if(arr_commands) {
+	            exec_command(arr_commands, *is_ampersand, *count);
+	        } else {
+	            printf("Error: ampersand is not last significant symbol\n");
+	        }
 	    }
 	    delete_commands(commands);
             commands = NULL;
