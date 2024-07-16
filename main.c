@@ -23,13 +23,14 @@ char **command_array(struct word_item *commands, int count, bool is_ampersand)
     return newArray;
 }
 
-void free_all_alloc_mem(int *n, int *arr_size, bool *flag, int *count, char *str, struct word_item *commands, char **arr_commands, bool *is_ampersand)
+void free_all_alloc_mem(int *n, int *arr_size, bool *flag, int *count, char *str, struct word_item *commands, char **arr_commands, bool *is_ampersand, bool *i_o_redirection)
 {
     free(n);
     free(arr_size);
     free(flag);
     free(count);
     free(is_ampersand);
+    free(i_o_redirection);
     if(str != NULL) {
         free(str);
     }
@@ -45,15 +46,16 @@ int main()
     char c, *str = NULL, **arr_commands = NULL;
     struct word_item *commands = NULL;
     int *n = malloc(sizeof(int)), *arr_size =  malloc(sizeof(int)), *count = malloc(sizeof(int));
-    bool *flag = malloc(sizeof(bool)), *is_ampersand = malloc(sizeof(bool));
+    bool *flag = malloc(sizeof(bool)), *is_ampersand = malloc(sizeof(bool)), *i_o_redirection = malloc(sizeof(bool));
     *n = 0;
     *arr_size = 2;
     *flag = false;
     *is_ampersand = false;
+    *i_o_redirection = false;
     *count = 0;
     printf("> ");
     while((c = getchar()) != EOF) {
-	str = read_commands(str, c, n, arr_size, flag, count, &commands, is_ampersand);
+	str = read_commands(str, c, n, arr_size, flag, count, &commands, is_ampersand, i_o_redirection);
 	if(c == '\n') {
             print_commands(&commands);
 	    *n = 0;
@@ -64,11 +66,11 @@ int main()
 		str = NULL;
             }
 	    *flag = false;
-	    printf("Count: %d\nIs_ampersand: %s\n", *count, *is_ampersand ? "true" : "false");
+	    printf("Count: %d\nIs_ampersand: %s\nI_O_Redirection: %s\n", *count, *is_ampersand ? "true" : "false", *i_o_redirection ? "true" : "false");
 	    if(commands) {
 	        arr_commands = command_array(commands, *count, *is_ampersand);
 	        if(arr_commands) {
-	            exec_command(arr_commands, *is_ampersand, *count);
+	            exec_command(arr_commands, *is_ampersand, *count, *i_o_redirection);
 	        } else {
 	            printf("Error: ampersand is not last significant symbol\n");
 	        }
@@ -79,6 +81,7 @@ int main()
 	    free(arr_commands);
 	    arr_commands = NULL;
 	    *is_ampersand = false;
+	    *i_o_redirection = false;
 	    printf("> ");
 	    continue;
 	}
@@ -86,7 +89,7 @@ int main()
     if(commands != NULL) {
         print_commands(&commands);
     }
-    free_all_alloc_mem(n, arr_size, flag, count, str, commands, arr_commands, is_ampersand);
+    free_all_alloc_mem(n, arr_size, flag, count, str, commands, arr_commands, is_ampersand, i_o_redirection);
     putchar('\n');
     return 0;
 }

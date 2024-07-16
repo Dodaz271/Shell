@@ -1,11 +1,14 @@
 #include "read_commands.h"
 
-bool separators(char c, char *str, int *n, bool *is_ampersand, bool flag)
+bool separators(char c, char *str, int *n, bool *is_ampersand, bool flag, bool *i_o_redirection)
 {
     if((c == '\n') || (c == ' ') || (c == '\t')) {
 	if((!flag) && (str != NULL) && (strcmp(str, "&") == 0)) {
             *is_ampersand = true;
         }
+	if((!flag) && (str != NULL) && ((strcmp(str, ">") == 0) || (strcmp(str, ">>") == 0) || (strcmp(str, "<") == 0))) {
+	    *i_o_redirection = true;
+	}
         return true;
     }
     if((str != NULL) && (!flag)) {
@@ -89,7 +92,7 @@ void print_commands(struct word_item **commands)
 
 }
 
-char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *count, struct word_item **commands, bool *is_ampersand)
+char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *count, struct word_item **commands, bool *is_ampersand, bool *i_o_redirection)
 {
     if((((str != NULL) && (str[*n-1] != '\\')) || (str == NULL)) && (c == '"')) {
         *flag = !(*flag);
@@ -98,7 +101,7 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	    free(str);
 	    str = NULL;
 	}
-	if((str != NULL) && (strcmp(str, "&") == 0) && (c == '"')) {
+	if((str != NULL) && (separators(c, str, n, is_ampersand, *flag, i_o_redirection)/*strcmp(str, "&") == 0*/) && (c == '"')) {
 	    if((*arr_size - *n) == 1) {
                 *arr_size *= 2;
                 str = newArray(str, *n, *arr_size);
@@ -108,12 +111,12 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	}
 	return str;
     } 
-    if((*flag == false) && (separators(c, str, n, is_ampersand, *flag))) {
+    if((*flag == false) && (separators(c, str, n, is_ampersand, *flag, i_o_redirection))) {
 	if(str != NULL) {
 	    if((*n > 1) && (str[*n-2] == '\\') && (str[*n-1] == '\\')) {
                 str[*n-1] = '\0';
 	    }
-	    if((str != NULL) && (strcmp(str, "&\"") == 0)) {
+	    if((str != NULL) && (separators(c, str, n, is_ampersand, *flag, i_o_redirection)) && ((str[1] == '\"') || (str[2] == '\"'))) {
 	        str[*n] = '\0';
 	    }
             add_node(commands, str);
@@ -123,7 +126,7 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	*arr_size = 2;
 	free(str);
 	str = NULL;
-	if(((c != ' ') && (c != '\n') && (c != '\t') && (separators(c, str, n, is_ampersand, *flag))) || (!separators(c, str, n, is_ampersand, *flag))) {
+	if(((c != ' ') && (c != '\n') && (c != '\t') && (separators(c, str, n, is_ampersand, *flag, i_o_redirection))) || (!separators(c, str, n, is_ampersand, *flag, i_o_redirection))) {
 	    str = (char*)malloc(2 * sizeof(char));
 	    str[0] = c;
 	    str[1] = '\0';
