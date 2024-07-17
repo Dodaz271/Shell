@@ -20,35 +20,41 @@ void change_dir(char **arr_commands)
     return;
 }
 
-void exec_command(char **arr_commands, bool is_ampersand, int count, bool i_o_redirection)
+void exec_command(char **arr_commands, int count, int *size, int **pos_separators)
 {
-    int pid, p, fd;
-    bool input_flag = false, output_flag = false;
-    char *file_name = NULL;
-    if(is_ampersand) {
-        arr_commands[count-1] = NULL;
-    }
+    int pid, p, fd, j = 0;
+    bool input_flag = false, output_flag = false, is_ampersand = false;
     if(strcmp(arr_commands[0], "cd") == 0) {
         change_dir(arr_commands);
 	return;
     }
-    if(i_o_redirection) {
+    if(*pos_separators) {
+	printf("Check\n");
         for(int i = 0; i < count; i++) {
-	    if(strcmp(arr_commands[i], ">") == 0) {
+            if((j < ((*size)-1)) && (i > (*pos_separators)[j])) {
+		printf("POS: %d\n", (*pos_separators)[j]);
+	        j++;
+	    }
+	    if((i == ((*pos_separators)[j]-1)) && (strcmp(arr_commands[i], "&") == 0)) {
+	        arr_commands[i] = NULL;
+		is_ampersand = true;
+		break;
+	    }
+	    if((i == ((*pos_separators)[j]-1)) && (strcmp(arr_commands[i], ">") == 0)) {
 		fd = open(arr_commands[i+1], O_CREAT|O_WRONLY|O_TRUNC, 0666);  
 		arr_commands[i+1] = NULL;
 		arr_commands[i] = NULL;
 		input_flag = true;
 		break;
 	    }
-	    if(strcmp(arr_commands[i], ">>") == 0) {
+	    if((i == ((*pos_separators)[j]-1)) && (strcmp(arr_commands[i], ">>") == 0)) {
 	        fd = open(arr_commands[i+1], O_CREAT|O_WRONLY|O_APPEND, 0666);
                 arr_commands[i+1] = NULL;
                 arr_commands[i] = NULL;
 		input_flag = true;
                 break;
 	    }
-	    if(strcmp(arr_commands[i], "<") == 0) {
+	    if((i == ((*pos_separators)[j]-1)) && (strcmp(arr_commands[i], "<") == 0)) {
 	        fd = open(arr_commands[i+1], O_RDONLY);
                 arr_commands[i+1] = NULL;
                 arr_commands[i] = NULL;
@@ -79,13 +85,6 @@ void exec_command(char **arr_commands, bool is_ampersand, int count, bool i_o_re
 	perror(arr_commands[0]);
 	exit(0);
     }
-    /*if(output_flag) {
-        dup2(save, 0);
-    }
-    if(input_flag) {
-        dup2(save, 1);
-    }*/
-    close(fd);
     if(!is_ampersand) {
         do {
             p = wait(NULL);

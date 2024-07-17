@@ -1,13 +1,37 @@
 #include "read_commands.h"
 
-bool separators(char c, char *str, int *n, bool *is_ampersand, bool flag, bool *i_o_redirection)
+void add_element(int **pos_separators, int *size, int new_value) {
+    int *temp = (int*)malloc(((*size)+1) * sizeof(int));
+    int i;
+    if (temp == NULL) {
+        printf("Memory reallocation failed\n");
+        free(pos_separators);
+        exit(1);
+    }
+    if((*size > 0) && (new_value == (*pos_separators)[*size-1])) {
+	free(temp);
+    	return;
+    }
+    if((*size) > 0) {
+        for(i = 0; i < (*size); i++) {
+            temp[i] = (*pos_separators)[i];
+        }
+    }
+    free(*pos_separators);
+    temp[*size] = new_value;
+    (*size)++;
+    *pos_separators = temp;
+    return;
+}
+
+bool separators(char c, char *str, int *n, bool flag, int **pos_separators, int *count, int *size)
 {
     if((c == '\n') || (c == ' ') || (c == '\t')) {
 	if((!flag) && (str != NULL) && (strcmp(str, "&") == 0)) {
-            *is_ampersand = true;
+	    add_element(pos_separators, size, (*count+1));
         }
 	if((!flag) && (str != NULL) && ((strcmp(str, ">") == 0) || (strcmp(str, ">>") == 0) || (strcmp(str, "<") == 0))) {
-	    *i_o_redirection = true;
+	    add_element(pos_separators, size, (*count+1));
 	}
         return true;
     }
@@ -92,7 +116,7 @@ void print_commands(struct word_item **commands)
 
 }
 
-char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *count, struct word_item **commands, bool *is_ampersand, bool *i_o_redirection)
+char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *count, struct word_item **commands, int **pos_separators, int *size)
 {
     if((((str != NULL) && (str[*n-1] != '\\')) || (str == NULL)) && (c == '"')) {
         *flag = !(*flag);
@@ -101,7 +125,7 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	    free(str);
 	    str = NULL;
 	}
-	if((str != NULL) && (separators(c, str, n, is_ampersand, *flag, i_o_redirection)/*strcmp(str, "&") == 0*/) && (c == '"')) {
+	if((str != NULL) && (separators(c, str, n, *flag, pos_separators, count, size)) && (c == '"')) {
 	    if((*arr_size - *n) == 1) {
                 *arr_size *= 2;
                 str = newArray(str, *n, *arr_size);
@@ -111,12 +135,12 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	}
 	return str;
     } 
-    if((*flag == false) && (separators(c, str, n, is_ampersand, *flag, i_o_redirection))) {
+    if((*flag == false) && (separators(c, str, n, *flag, pos_separators, count, size))) {
 	if(str != NULL) {
 	    if((*n > 1) && (str[*n-2] == '\\') && (str[*n-1] == '\\')) {
                 str[*n-1] = '\0';
 	    }
-	    if((str != NULL) && (separators(c, str, n, is_ampersand, *flag, i_o_redirection)) && ((str[1] == '\"') || (str[2] == '\"'))) {
+	    if((str != NULL) && (separators(c, str, n, *flag, pos_separators, count, size)) && ((str[1] == '\"') || (str[2] == '\"'))) {
 	        str[*n] = '\0';
 	    }
             add_node(commands, str);
@@ -126,7 +150,7 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	*arr_size = 2;
 	free(str);
 	str = NULL;
-	if(((c != ' ') && (c != '\n') && (c != '\t') && (separators(c, str, n, is_ampersand, *flag, i_o_redirection))) || (!separators(c, str, n, is_ampersand, *flag, i_o_redirection))) {
+	if(((c != ' ') && (c != '\n') && (c != '\t') && (separators(c, str, n, *flag, pos_separators, count, size))) || (!separators(c, str, n, *flag, pos_separators, count, size))) {
 	    str = (char*)malloc(2 * sizeof(char));
 	    str[0] = c;
 	    str[1] = '\0';

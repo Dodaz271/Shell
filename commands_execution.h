@@ -8,5 +8,5 @@
 
 
 void change_dir(char **arr_commands);
-void exec_command(char **arr_commands, bool is_ampersand, int count, bool i_o_redirection);
+void exec_command(char **arr_commands, int count, int *size, int **pos_separators);
 
