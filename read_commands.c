@@ -26,12 +26,14 @@ void add_element(int **pos_separators, int *size, int new_value) {
 
 bool separators(char c, char *str, int *n, bool flag, int **pos_separators, int *count, int *size)
 {
+    const char *separators[] = {"&", "&&", ">", "<", ">>", "|", "||", ";", "(", ")"};
     if((c == '\n') || (c == ' ') || (c == '\t')) {
-	if((!flag) && (str != NULL) && (strcmp(str, "&") == 0)) {
-	    add_element(pos_separators, size, (*count+1));
-        }
-	if((!flag) && (str != NULL) && ((strcmp(str, ">") == 0) || (strcmp(str, ">>") == 0) || (strcmp(str, "<") == 0))) {
-	    add_element(pos_separators, size, (*count+1));
+	if((!flag) && (str != NULL)) {
+	    for (int i = 0; i < 10; i++) {
+                if (strcmp(str, separators[i]) == 0) {
+                    add_element(pos_separators, size, (*count+1));
+                }
+	    }
 	}
         return true;
     }
@@ -42,7 +44,7 @@ bool separators(char c, char *str, int *n, bool flag, int **pos_separators, int 
 	    }
 	    return false;
 	}
-	const char *separators[] = {"&", "&&", ">", "<", ">>", "|", "||", ";", "(", ")"};
+	//const char *separators[] = {"&", "&&", ">", "<", ">>", "|", "||", ";", "(", ")"};
         for (int i = 0; i < 10; i++) {
             if (strcmp(str, separators[i]) == 0) {
                 return true;

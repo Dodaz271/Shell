@@ -65,12 +65,12 @@ int main()
             }
 	    *flag = false;
 	    printf("Count: %d\n", *count);
-	    if(commands) {
+	    /*if(commands) {
 	        arr_commands = command_array(commands, *count);
 	        if(arr_commands) {
 	            exec_command(arr_commands, *count, size, pos_separators);
 	        }
-	   }
+	   }*/
 	    delete_commands(commands);
             commands = NULL;
 	    *count = 0;
