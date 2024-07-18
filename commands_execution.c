@@ -70,27 +70,6 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
 	    if(i_o_redirection(arr_commands, &input_flag, &output_flag, pos_separators, i, &fd, j)) {
 		break;
 	    }
-	    /*if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], ">") == 0)) {
-		fd = open(arr_commands[i+1], O_CREAT|O_WRONLY|O_TRUNC, 0666);  
-		arr_commands[i+1] = NULL;
-		arr_commands[i] = NULL;
-		input_flag = true;
-		break;
-	    }
-	    if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], ">>") == 0)) {
-	        fd = open(arr_commands[i+1], O_CREAT|O_WRONLY|O_APPEND, 0666);
-                arr_commands[i+1] = NULL;
-                arr_commands[i] = NULL;
-		input_flag = true;
-                break;
-	    }
-	    if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], "<") == 0)) {
-	        fd = open(arr_commands[i+1], O_RDONLY);
-                arr_commands[i+1] = NULL;
-                arr_commands[i] = NULL;
-		output_flag = true;
-		break;
-	    }*/
 	}
 	if(fd == -1) {
 	    perror("open");
@@ -123,8 +102,5 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
     } else {
         printf("Process running in background with PID %d\n", pid);
     }
-    /*free(input_flag);
-    free(output_flag);
-    free(is_ampersand);*/
     return;
 }
