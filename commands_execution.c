@@ -35,26 +35,26 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
 		printf("POS: %d\n", (*pos_separators)[j]);
 	        j++;
 	    }
-	    if((i == ((*pos_separators)[j]-1)) && (strcmp(arr_commands[i], "&") == 0)) {
+	    if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], "&") == 0)) {
 	        arr_commands[i] = NULL;
 		is_ampersand = true;
 		break;
 	    }
-	    if((i == ((*pos_separators)[j]-1)) && (strcmp(arr_commands[i], ">") == 0)) {
+	    if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], ">") == 0)) {
 		fd = open(arr_commands[i+1], O_CREAT|O_WRONLY|O_TRUNC, 0666);  
 		arr_commands[i+1] = NULL;
 		arr_commands[i] = NULL;
 		input_flag = true;
 		break;
 	    }
-	    if((i == ((*pos_separators)[j]-1)) && (strcmp(arr_commands[i], ">>") == 0)) {
+	    if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], ">>") == 0)) {
 	        fd = open(arr_commands[i+1], O_CREAT|O_WRONLY|O_APPEND, 0666);
                 arr_commands[i+1] = NULL;
                 arr_commands[i] = NULL;
 		input_flag = true;
                 break;
 	    }
-	    if((i == ((*pos_separators)[j]-1)) && (strcmp(arr_commands[i], "<") == 0)) {
+	    if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], "<") == 0)) {
 	        fd = open(arr_commands[i+1], O_RDONLY);
                 arr_commands[i+1] = NULL;
                 arr_commands[i] = NULL;

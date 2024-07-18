@@ -31,7 +31,7 @@ bool separators(char c, char *str, int *n, bool flag, int **pos_separators, int 
 	if((!flag) && (str != NULL)) {
 	    for (int i = 0; i < 10; i++) {
                 if (strcmp(str, separators[i]) == 0) {
-                    add_element(pos_separators, size, (*count+1));
+                    add_element(pos_separators, size, (*count));
                 }
 	    }
 	}
