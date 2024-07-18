@@ -20,10 +20,37 @@ void change_dir(char **arr_commands)
     return;
 }
 
+bool i_o_redirection(char **arr_commands, bool *input_flag, bool *output_flag, int **pos_separators, int i, int *fd, int j)
+{
+    if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], ">") == 0)) {
+        *fd = open(arr_commands[i+1], O_CREAT|O_WRONLY|O_TRUNC, 0666);
+        arr_commands[i+1] = NULL;
+        arr_commands[i] = NULL;
+        *input_flag = true;
+	return true;
+    }
+    if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], ">>") == 0)) {
+        *fd = open(arr_commands[i+1], O_CREAT|O_WRONLY|O_APPEND, 0666);
+        arr_commands[i+1] = NULL;
+        arr_commands[i] = NULL;
+        *input_flag = true;
+	return true;
+    }
+    if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], "<") == 0)) {
+        *fd = open(arr_commands[i+1], O_RDONLY);
+        arr_commands[i+1] = NULL;
+        arr_commands[i] = NULL;
+        *output_flag = true;
+	return true;
+    }
+    return false;
+}
+
 void exec_command(char **arr_commands, int count, int *size, int **pos_separators)
 {
     int pid, p, fd, j = 0;
-    bool input_flag = false, output_flag = false, is_ampersand = false;
+    bool input_flag, output_flag, is_ampersand;
+    input_flag = output_flag = is_ampersand = false;
     if(strcmp(arr_commands[0], "cd") == 0) {
         change_dir(arr_commands);
 	return;
@@ -40,7 +67,10 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
 		is_ampersand = true;
 		break;
 	    }
-	    if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], ">") == 0)) {
+	    if(i_o_redirection(arr_commands, &input_flag, &output_flag, pos_separators, i, &fd, j)) {
+		break;
+	    }
+	    /*if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], ">") == 0)) {
 		fd = open(arr_commands[i+1], O_CREAT|O_WRONLY|O_TRUNC, 0666);  
 		arr_commands[i+1] = NULL;
 		arr_commands[i] = NULL;
@@ -60,7 +90,7 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
                 arr_commands[i] = NULL;
 		output_flag = true;
 		break;
-	    }
+	    }*/
 	}
 	if(fd == -1) {
 	    perror("open");
@@ -93,5 +123,8 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
     } else {
         printf("Process running in background with PID %d\n", pid);
     }
+    /*free(input_flag);
+    free(output_flag);
+    free(is_ampersand);*/
     return;
 }
