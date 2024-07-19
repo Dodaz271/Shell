@@ -22,6 +22,12 @@ void change_dir(char **arr_commands)
 
 bool i_o_redirection(char **arr_commands, bool *input_flag, bool *output_flag, int **pos_separators, int i, int *fd, int j)
 {
+    if(((strcmp(arr_commands[i], ">") == 0) || (strcmp(arr_commands[i], "<") == 0) || (strcmp(arr_commands[i], ">>") == 0)) && ((i+1) == (*pos_separators)[j+1])) {
+	printf("Name of file can't be seporator\n");
+	perror("File name");
+	*fd = -1;
+        return false;
+    }
     if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], ">") == 0)) {
         *fd = open(arr_commands[i+1], O_CREAT|O_WRONLY|O_TRUNC, 0666);
         arr_commands[i+1] = NULL;
