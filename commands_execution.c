@@ -73,7 +73,7 @@ bool pipefunc(char **arr_commands, bool *pipe_flag, int i, int j, int **pos_sepa
 
 void exec_command(char **arr_commands, int count, int *size, int **pos_separators)
 {
-    int pid, p, fd, j = 0, n = 0, amount = 0, vol = 0;
+    int pid, p, fd, j = 0, n = 0, amount = 0, vol = 0, k;
     char **command = NULL;
     bool input_flag, output_flag, is_ampersand, pipe_flag;
     input_flag = output_flag = is_ampersand = pipe_flag = false;
@@ -81,9 +81,6 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
         change_dir(arr_commands);
 	return;
     }
-    /*if(*pos_separators) {
-        command = malloc((*pos_separators)[j] * sizeof(int*));
-    }*/
     while(amount < count) {
         if((*pos_separators) && ((*pos_separators)[j] != 0)) {
 	    if(command != NULL) {
@@ -102,11 +99,6 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
                 if((j < ((*size)-1)) && (i > (*pos_separators)[j])) {
 		    printf("POS: %d\n", (*pos_separators)[j]);
 	            j++;
-		    /*if(command != NULL) {
-		        free(command);
-			command = NULL;
-		    }
-		    command = malloc((*pos_separators)[j] * sizeof(int*));*/
 	        }
 	        if(i != ((*pos_separators)[j])) {
 	            command[n] = arr_commands[i];
@@ -116,9 +108,7 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
 		    n = 0;
 		}
 	        if((i == ((*pos_separators)[j])) && (strcmp(arr_commands[i], "&") == 0)) {
-	            //arr_commands[i] = NULL;
 		    is_ampersand = true;
-		    //amount++;
 		    break;
 	        }
 	        if(i_o_redirection(arr_commands, &input_flag, &output_flag, pos_separators, i, &fd, j)) {
@@ -136,9 +126,14 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
 	        return;
 	    }
         } else {
-	    command = malloc(2 * sizeof(char*));
-	    command[0] = arr_commands[0];
-	    command[1] = NULL;
+	    if(!command) {
+	        command = malloc((count+1) * sizeof(char*));
+	    }
+	    for(k = 0; k < count; k++) {
+	        command[k] = arr_commands[k];
+	    }
+	    printf("K: %d\n", k);
+	    command[k] = NULL;
 	}
         if(!pipe_flag) {
             pid = fork(); 
@@ -169,9 +164,7 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
         }
 	amount++;
 	input_flag = output_flag = is_ampersand = false;
-	printf("WHILE\n");
     }
     free(command);
-    printf("END WHILE\n");
     return;
 }
