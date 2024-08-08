@@ -6,16 +6,18 @@
 #include "commands_execution.h"
 
 
-char **command_array(struct word_item *commands, int count)
-{
-    struct word_item *tmp = commands;
-    int i = 0;
-    char **newArray = malloc((count+1) * sizeof(char*));
-    for(i = 0; i < count; i++) {
-        newArray[i] = tmp->word;
-	tmp = tmp->next;
+char **command_array(struct word_item *commands, int count) {
+    char **newArray = malloc((count + 1) * sizeof(char*));
+    if (!newArray) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
     }
-    newArray[i] = NULL;
+    struct word_item *tmp = commands;
+    for (int i = 0; i < count; i++) {
+        newArray[i] = tmp->word;
+        tmp = tmp->next;
+    }
+    newArray[count] = NULL;
     return newArray;
 }
 
@@ -45,7 +47,6 @@ int main()
     int *n = malloc(sizeof(int)), *arr_size =  malloc(sizeof(int)), *count = malloc(sizeof(int));
     bool *flag = malloc(sizeof(bool));
     int **pos_separators = malloc(sizeof(int)), *size = malloc(sizeof(int));
-    int j = 0;
     *n = 0;
     *arr_size = 2;
     *flag = false;
@@ -55,7 +56,7 @@ int main()
     while((c = getchar()) != EOF) {
 	str = read_commands(str, c, n, arr_size, flag, count, &commands, pos_separators, size);
 	if(c == '\n') {
-            print_commands(&commands);
+            //print_commands(&commands);
 	    *n = 0;
 	    *arr_size = 0;
             if(*flag == true) {
@@ -64,23 +65,23 @@ int main()
 		str = NULL;
             }
 	    *flag = false;
-	    printf("Count: %d\n", *count);
+	    //printf("Count: %d\n", *count);
 	    if(commands) {
 	        arr_commands = command_array(commands, *count);
+		//delete_commands(commands);
 	        if(arr_commands) {
 	            exec_command(arr_commands, *count, size, pos_separators);
 	        }
-	   }
-	    delete_commands(commands);
-            commands = NULL;
-	    *count = 0;
-	    free(arr_commands);
-	    for(j = 0; j < *size; j++) {
-                printf("POS_SEPARATORS[%d]: %d\n", j, (*pos_separators)[j]);
-		(*pos_separators)[j] = '\0';
-            }
-	    *size = 0;
-	    arr_commands = NULL;
+	        delete_commands(commands);
+	        *count = 0;
+	        free(arr_commands);
+	        free(*pos_separators);
+		//free(pos_separators);
+	        *pos_separators = NULL;
+	        *size = 0;
+	        arr_commands = NULL;
+	    }
+	    commands = NULL;
 	    printf("> ");
 	    continue;
 	}

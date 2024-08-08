@@ -1,7 +1,7 @@
 #include "read_commands.h"
 
 void add_element(int **pos_separators, int *size, int new_value) {
-    int *temp = (int*)malloc(((*size)+1) * sizeof(int));
+    int *temp = (int*)malloc(((*size) + 2) * sizeof(int));
     int i;
     if (temp == NULL) {
         printf("Memory reallocation failed\n");
@@ -12,14 +12,19 @@ void add_element(int **pos_separators, int *size, int new_value) {
 	free(temp);
     	return;
     }
-    if((*size) > 0) {
-        for(i = 0; i < (*size); i++) {
-            temp[i] = (*pos_separators)[i];
-        }
+    for(i = 0; i < (*size); i++) {
+	if(new_value == (*pos_separators)[i]) {
+	    free(temp);
+	    return;
+	}
+        temp[i] = (*pos_separators)[i];
     }
-    free(*pos_separators);
+    if(*size > 0) {
+        free(*pos_separators);
+    }
     temp[*size] = new_value;
     (*size)++;
+    temp[*size] = -1;
     *pos_separators = temp;
     return;
 }
@@ -47,6 +52,7 @@ bool separators(char c, char *str, int *n, bool flag, int **pos_separators, int 
 	//const char *separators[] = {"&", "&&", ">", "<", ">>", "|", "||", ";", "(", ")"};
         for (int i = 0; i < 10; i++) {
             if (strcmp(str, separators[i]) == 0) {
+		add_element(pos_separators, size, (*count));
                 return true;
             }
         }
@@ -81,31 +87,29 @@ char *newArray(char *str, int n, int arr_size)
     return newArray;
 }
 
-void add_node(struct word_item **first, const char *str)
-{
-    struct word_item *newNode = (struct word_item*)malloc(sizeof(struct word_item));
-    if(newNode == NULL) {
-	perror("malloc");
+void add_node(struct word_item **first, const char *str) {
+    // Allocate memory for the new node
+    struct word_item *newNode = malloc(sizeof(struct word_item));
+    if (!newNode) {
+        perror("malloc");
         return;
     }
-    struct word_item *last;
-    if(str != NULL) {
-        newNode->word = strdup(str);
-    } else {
-        newNode->word = NULL;
-    }
+    newNode->word = str ? strdup(str) : NULL;
     newNode->next = NULL;
-    if(*first == NULL) {
+
+    // If the list is empty, set the new node as the first node
+    if (!*first) {
         *first = newNode;
     } else {
-        last = *first;
-        while(last->next != NULL) {
-	    last = last->next;
-	}
-	last->next = newNode;
+        // Otherwise, append the new node to the end of the list
+        struct word_item *last = *first;
+        while (last->next) {
+            last = last->next;
+        }
+        last->next = newNode;
     }
-    return;
 }
+
 
 void print_commands(struct word_item **commands)
 {
@@ -142,7 +146,7 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
 	    if((*n > 1) && (str[*n-2] == '\\') && (str[*n-1] == '\\')) {
                 str[*n-1] = '\0';
 	    }
-	    if((str != NULL) && (separators(c, str, n, *flag, pos_separators, count, size)) && ((str[1] == '\"') || (str[2] == '\"'))) {
+	    if((str != NULL) && (separators(c, str, n, *flag, pos_separators, count, size)) && ((str[1] == '\"') || (str[2] == '\"'))) {  // if str == separator\" (&\") or str = two separators\" (&&\") 
 	        str[*n] = '\0';
 	    }
             add_node(commands, str);
@@ -163,20 +167,21 @@ char *read_commands(char *str, char c, int *n, int *arr_size, bool *flag, int *c
     if(c != '\n') {
         if(str == NULL) {
             str = (char*)malloc(2 * sizeof(char));
-        }
-        if((*arr_size - *n) == 1) {
-	    *arr_size *= 2;
-            str = newArray(str, *n, *arr_size);
-        }
-	if((str[*n-1] == '\\') && (c != '\\')) {
-	    (*n)--;
-	}
-	if((*n > 1) && (str[*n-2] == '\\') && (str[*n-1] == '\\')) {
-	    (*n)--;
+        } else {
+	    if((*arr_size - *n) == 1) {
+	        *arr_size *= 2;
+                str = newArray(str, *n, *arr_size);
+	    }
+            if((str[*n-1] == '\\') && (c != '\\')) {
+	        (*n)--;
+	    }
+	    if((*n > 1) && (str[*n-2] == '\\') && (str[*n-1] == '\\')) {
+	        (*n)--;
+	    }
 	}
         str[*n] = c;
-        str[*n + 1] = '\0';
-        (*n)++;
+	(*n)++;
+        str[*n] = '\0';
     }
     return str;
 }
