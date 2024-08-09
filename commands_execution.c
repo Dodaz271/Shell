@@ -136,12 +136,15 @@ char ***newPipearray(char ****pipe_command, char **token, int *len) {
 int size_of_token(int count, int amount, int **pos_separators, int j, int *size)
 {
     int vol = 0;
-    if ((j == 0) && (amount < ((*pos_separators)[j]))) {
+    if ((j == 0)/* && (amount < ((*pos_separators)[j]))*/) {
+	printf("1 ");
         vol = ((*pos_separators)[j]);
-    } else if ((amount > (*pos_separators)[j]) && (j < (*size - 1))) {
-        vol = ((*pos_separators)[j + 1]) - amount;
+    } else if (/*(amount < (*pos_separators)[j]) && */((*pos_separators)[j] != -1)) {
+	printf("2 ");
+        vol = ((*pos_separators)[j]) - amount;
     } else {
-        vol = count - ((*pos_separators)[j] + 1);
+	printf("3 ");
+        vol = count - ((*pos_separators)[j-1] + 1);
     }
     return vol;
 }
@@ -220,6 +223,7 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
     while (amount < count) {
         if ((pos_separators) && (*pos_separators)) {
 	    vol = size_of_token(count, amount, pos_separators, j, size);
+	    printf("VOL: %d\n", vol);
             token = malloc((vol+1) * sizeof(char*));
             for (i = amount; i < count; i++) {
 		add_tokens(&token, i, pos_separators, &n, j, arr_commands);
