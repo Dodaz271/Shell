@@ -49,7 +49,6 @@ bool separators(char c, char *str, int *n, bool flag, int **pos_separators, int 
 	    }
 	    return false;
 	}
-	//const char *separators[] = {"&", "&&", ">", "<", ">>", "|", "||", ";", "(", ")"};
         for (int i = 0; i < 10; i++) {
             if (strcmp(str, separators[i]) == 0) {
 		add_element(pos_separators, size, (*count));

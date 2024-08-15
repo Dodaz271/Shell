@@ -9,7 +9,6 @@
 
 void change_dir(char **arr_commands);
 bool i_o_redirection(char ***arr_commands, bool *input_flag, bool *output_flag, int **pos_separators, int i, int *fd, int j);
-bool pipefunc(char **arr_commands, bool *pipe_flag, int i, int j, int **pos_separators);
 bool search_separators(int *amount, int i, int *j, int **pos_separators, char **arr_commands, bool *is_ampersand, bool *input_flag, bool *output_flag, int *fd, bool *pipe_flag, int *size);
 void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands, int **pos_separators, int j, bool is_ampersand, int amount);
 char *** newPipearray(char ****pipe_command, char **token, int *len);

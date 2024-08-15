@@ -56,7 +56,6 @@ int main()
     while((c = getchar()) != EOF) {
 	str = read_commands(str, c, n, arr_size, flag, count, &commands, pos_separators, size);
 	if(c == '\n') {
-            //print_commands(&commands);
 	    *n = 0;
 	    *arr_size = 0;
             if(*flag == true) {
@@ -65,10 +64,8 @@ int main()
 		str = NULL;
             }
 	    *flag = false;
-	    //printf("Count: %d\n", *count);
 	    if(commands) {
 	        arr_commands = command_array(commands, *count);
-		//delete_commands(commands);
 	        if(arr_commands) {
 	            exec_command(arr_commands, *count, size, pos_separators);
 	        }
@@ -76,7 +73,6 @@ int main()
 	        *count = 0;
 	        free(arr_commands);
 	        free(*pos_separators);
-		//free(pos_separators);
 	        *pos_separators = NULL;
 	        *size = 0;
 	        arr_commands = NULL;

@@ -44,14 +44,6 @@ bool i_o_redirection(char ***arr_commands, bool *input_flag, bool *output_flag, 
     return false;
 }
 
-bool pipefunc(char **arr_commands, bool *pipe_flag, int i, int j, int **pos_separators) {
-    if ((i == (*pos_separators)[j]) && (strcmp(arr_commands[i], "|") == 0)) {
-        *pipe_flag = true;
-        return true;
-    }
-    return false;
-}
-
 bool search_separators(int *amount, int i, int *j, int **pos_separators, char **arr_commands, bool *is_ampersand, bool *input_flag, bool *output_flag, int *fd, bool *pipe_flag, int *size) 
 {
     if(((*j > 0) && (strcmp(arr_commands[(*pos_separators)[*j-1]], "|") == 0)) || (((*pos_separators)[*j] == -1) && (strcmp(arr_commands[(*pos_separators)[*j-1]], "|") == 0))) {
@@ -85,7 +77,7 @@ void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands
     if(pipe_pid == 0) {
 	dup2(*pipe_input, 0);
         close(*pipe_input);
-        if((((*pos_separators)[j] != -1) && (strcmp(arr_commands[(*pos_separators)[j]], "|") == 0)) || (((*pos_separators)[j-1] == (amount-1)) && ((*pos_separators)[j] == -1) && (strcmp(arr_commands[(*pos_separators)[j-1]], "|") == 0))) {
+        if((((*pos_separators)[j] != -1) && ((strcmp(arr_commands[(*pos_separators)[j]], "|") == 0) || (strcmp(arr_commands[(*pos_separators)[j-1]], "|") == 0))) || (((*pos_separators)[j-1] == (amount-1)) && ((*pos_separators)[j] == -1) && (strcmp(arr_commands[(*pos_separators)[j-1]], "|") == 0))) {
             dup2(pipe_fd[1], 1);
         }
         close(pipe_fd[0]);
@@ -98,7 +90,6 @@ void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands
         close(*pipe_input);
     }
     close(pipe_fd[1]);
-    //wait(NULL);
     if (*pipe_input != 0) {
         close(*pipe_input); 
     }
@@ -228,13 +219,6 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
                 }
                 amount++;
             }
-            //if ((pipe_flag) && (token)) {
-                //pipe_command = newPipearray(&pipe_command, token, &len);
-                //pipe_flag = false;
-                //if((amount < count) && (strcmp(arr_commands[(*pos_separators)[j-1]], "|") == 0)) {
-                //    continue;
-                //}
-            //}
             if (fd == -1) {
                 perror("open");
                 return;
@@ -257,13 +241,12 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
 	    execute_single_command(token, input_flag, output_flag, fd, is_ampersand);
 	    amount++;
         } else {
-            /*pipe_input = */pipeline(pipe_fd, token, &pipe_input, arr_commands, pos_separators, j, is_ampersand, amount);
-	    //printf("PIPE_INPUT: %d\n", pipe_input);
-	    if((((*pos_separators)[j] == -1) && ((amount-1) > (*pos_separators)[j-1])) || (((*pos_separators)[j] != -1) && (strcmp(arr_commands[(*pos_separators)[j]], "|") != 0))) {
+            pipeline(pipe_fd, token, &pipe_input, arr_commands, pos_separators, j, is_ampersand, amount);
+	    if((((*pos_separators)[j] == -1) && (((strcmp(arr_commands[(*pos_separators)[j-1]], "|") == 0) && ((amount-1) > (*pos_separators)[j-1])) || ((strcmp(arr_commands[(*pos_separators)[j-1]], "|") != 0) && ((amount) >= (*pos_separators)[j-1])))) || (((*pos_separators)[j] != -1) && (strcmp(arr_commands[(*pos_separators)[j]], "|") != 0) && (amount >= (*pos_separators)[j]))) {
                 close(pipe_input);
+		amount++;
             }
         }
-        //amount++;
         input_flag = output_flag = is_ampersand = false;
 	if(pipe_command) {
             free_pipe_commands(&pipe_command, len);
