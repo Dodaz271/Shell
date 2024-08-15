@@ -74,42 +74,42 @@ bool search_separators(int *amount, int i, int *j, int **pos_separators, char **
     return false;
 }
 
-void pipeline(char ***pipe_command, bool is_ampersand, int len, char **arr_commands, int **pos_separators) {
-    int pipe_pid, p, pipefd[2], input_fd = 0;
-    for (int i = 0; i < len; i++) {
-        if (pipe(pipefd) == -1) {
-            perror("pipe");
-            return;
-        }
-        pipe_pid = fork();
-        if (pipe_pid == -1) {
-            perror("fork");
-            return;
-        }
-        if (pipe_pid == 0) {
-            dup2(input_fd, 0);
-            if (i < len - 1) {
-                dup2(pipefd[1], 1);
-            }
-            close(pipefd[0]);
-            close(pipefd[1]);
-            execvp(pipe_command[i][0], pipe_command[i]);
-            perror(pipe_command[i][0]);
-            exit(0);
-        }
-        close(pipefd[1]);
-        if (!is_ampersand) {
-            do {
-                p = wait(NULL);
-            } while (p != pipe_pid);
-        } else {
-            printf("Process running in background with PID %d\n", pipe_pid);
-        }
-        input_fd = pipefd[0];
+void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands, int **pos_separators, int j, bool is_ampersand, int amount) {
+    int pipe_pid, p;
+    pipe(pipe_fd);
+    if(pipe_fd == -1) {
+        perror("pipe");
+	exit(1);
     }
-    if (input_fd != 0) {
-        close(input_fd);
+    pipe_pid = fork();
+    if(pipe_pid == 0) {
+	dup2(*pipe_input, 0);
+        close(*pipe_input);
+        if((((*pos_separators)[j] != -1) && (strcmp(arr_commands[(*pos_separators)[j]], "|") == 0)) || (((*pos_separators)[j-1] == (amount-1)) && ((*pos_separators)[j] == -1) && (strcmp(arr_commands[(*pos_separators)[j-1]], "|") == 0))) {
+            dup2(pipe_fd[1], 1);
+        }
+        close(pipe_fd[0]);
+	close(pipe_fd[1]);
+	execvp(token[0], token);
+        perror(token[0]);
+	exit(2);
     }
+    if(*pipe_input != 0) {
+        close(*pipe_input);
+    }
+    close(pipe_fd[1]);
+    //wait(NULL);
+    if (*pipe_input != 0) {
+        close(*pipe_input); 
+    }
+    if (!is_ampersand) {
+        do {
+            p = wait(NULL);
+        } while (p != pipe_pid);
+    } else {
+        printf("Process running in background with PID %d\n", pipe_pid);
+    }
+    *pipe_input = pipe_fd[0];
     return;
 }
 
@@ -178,25 +178,25 @@ void free_pipe_commands(char ****pipe_commands, int len) {
 }
 
 void execute_single_command(char **token, bool input_flag, bool output_flag, int fd, bool is_ampersand) {
-    int pid = fork();
+    int pid, p;
+    pid = fork();
     if (pid == -1) {
         perror("fork");
         return;
     }
     if (pid == 0) {
-        if (output_flag) {
+        /*if (output_flag) {
             dup2(fd, 0);
             close(fd);
-        }
-        if (input_flag) {
+        }*/
+        /*if (input_flag) {
             dup2(fd, 1);
             close(fd);
-        }
+        }*/
         execvp(token[0], token);
         perror(token[0]);
         exit(EXIT_FAILURE);
     } else if (!is_ampersand) {
-        int p;
         do {
             p = wait(NULL);
         } while (p != pid);
@@ -208,7 +208,7 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
 
 void exec_command(char **arr_commands, int count, int *size, int **pos_separators) 
 {
-    int i, fd, j = 0, n = 0, amount = 0, vol = 0, k, len = 0;
+    int i, fd, j = 0, n = 0, amount = 0, vol = 0, k, len = 0, pipe_fd[2], pipe_input = 0;
     char **token = NULL;
     char ***pipe_command = NULL;
     bool input_flag, output_flag, is_ampersand, pipe_flag;
@@ -228,13 +228,13 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
                 }
                 amount++;
             }
-            if ((pipe_flag) && (token)) {
-                pipe_command = newPipearray(&pipe_command, token, &len);
-                pipe_flag = false;
-                if((amount < count) && (strcmp(arr_commands[(*pos_separators)[j-1]], "|") == 0)) {
-                    continue;
-                }
-            }
+            //if ((pipe_flag) && (token)) {
+                //pipe_command = newPipearray(&pipe_command, token, &len);
+                //pipe_flag = false;
+                //if((amount < count) && (strcmp(arr_commands[(*pos_separators)[j-1]], "|") == 0)) {
+                //    continue;
+                //}
+            //}
             if (fd == -1) {
                 perror("open");
                 return;
@@ -244,30 +244,44 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
                 token = malloc((count + 1) * sizeof(char*));
             }
             for (k = 0; k < count; k++) {
-                if (((k + amount) < count) && (((j > 0) && (k != ((*pos_separators)[j - 1]))) || (true))) {
+                if (((k + amount) < count) && (((j > 0) && (k != ((*pos_separators)[j-1]))) || (true))) {
                     token[k] = strdup(arr_commands[k]);
                 } else {
                     break;
                 }
             }
+	    amount = amount + k;
             token[k] = NULL;
         }
-        if ((!pipe_command) && (token)) {
+        if ((!pipe_flag) && (token)) {
 	    execute_single_command(token, input_flag, output_flag, fd, is_ampersand);
-        } else if(pipe_command){
-            pipeline(pipe_command, is_ampersand, len, arr_commands, pos_separators);
+	    amount++;
+        } else {
+            /*pipe_input = */pipeline(pipe_fd, token, &pipe_input, arr_commands, pos_separators, j, is_ampersand, amount);
+	    //printf("PIPE_INPUT: %d\n", pipe_input);
+	    if((((*pos_separators)[j] == -1) && ((amount-1) > (*pos_separators)[j-1])) || (((*pos_separators)[j] != -1) && (strcmp(arr_commands[(*pos_separators)[j]], "|") != 0))) {
+                close(pipe_input);
+            }
         }
-        amount++;
+        //amount++;
         input_flag = output_flag = is_ampersand = false;
 	if(pipe_command) {
             free_pipe_commands(&pipe_command, len);
             pipe_command = NULL;
         } else if(token) {
-	    for(i = 0; i <= vol; i++) {
-                free(token[i]);
+	    if(vol > 0) {
+	        for(i = 0; i <= vol; i++) {
+		    free(token[i]);
+		}
+		free(token);
+		token = NULL;
+	    } else {
+	        for(i = 0; i <= count; i++) {
+		    free(token[i]);
+		}
+		free(token);
+		token = NULL;
 	    }
-	    free(token);
-	    token = NULL;
         }
 
     }
