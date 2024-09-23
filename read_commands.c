@@ -134,18 +134,21 @@ char *read_commands(char *str, bool *flag, int *count, int **pos_separators, int
             pos_prev_word = pos_next_word;
             do {
                 pos_next_word++;
-                if(str[pos_next_word] == '"') {
+                if(str[pos_next_word] == '"' && str[pos_next_word-1] != '\\') {
                     is_quotes = !is_quotes;
                     count_quotes++;
                 }
-            } while(((!is_quotes) && (str[pos_next_word] != '\0') && (str[pos_next_word] != ' ')) || ((is_quotes) && (str[pos_next_word] != '\0')));
+            } while((str[pos_next_word] != '\0') &&
+                   ((is_quotes && str[pos_next_word] != '\0') ||  // Inside quotes, move forward
+                    (!is_quotes && (str[pos_next_word] != ' ' || (str[pos_next_word - 1] == ' ')))  // Outside quotes
+                   ));
             pos_next_word = pos_next_word - count_quotes;
             count_quotes = 0;
         }
-        /*if((((str != NULL) && (n > 0) && (str[n-1] != '\\')) || (str == NULL)) && (str[n] == '"')) {
-            *flag = !(*flag);
-            memmove(&str[n], &str[n+1], max_capacity - n);
-        }*/
+        if(str[n-1] == '\\') {
+            memmove(&str[n-1], &str[n], max_capacity - n);
+            pos_next_word--;
+        }
         if(*flag == false) {
             if(separators(str, n, *flag, pos_separators, count, size, pos_next_word)) {
                 (*arr_commands) = inc_command_array(str, pos_prev_word, pos_next_word, arr_commands, *count);

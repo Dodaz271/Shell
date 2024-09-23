@@ -124,9 +124,7 @@ void handle_delete(int *curr_pos, int *max_pos, char **buf, char **command, int 
         (*max_pos)--;
 
         // Updating the display in the terminal
-        printf("\033[K"); // Clear from cursor to end of line
-        printf("\r> %s%s", *command, *buf);
-        printf("\033[%dG", (*curr_pos) + 3); // Moving the cursor
+        update_display(*command, *buf, curr_pos, max_pos);
         fflush(stdout);
     }
     return;
@@ -202,26 +200,19 @@ void remove_and_refresh(int *curr_pos, int *max_pos, char **buf, char **command,
         if ((*curr_pos) <= (*n)) {
             memmove(&(*command)[*curr_pos - 1], &(*command)[*curr_pos], (*n) - (*curr_pos) + 1);
             (*n)--;
-	    (*command)[*n] = '\0';
+	        (*command)[*n] = '\0';
         } else {
             int buf_index = (*curr_pos) - (*n) - 1;
             memmove(&(*buf)[buf_index], &(*buf)[buf_index + 1], (*len) - buf_index);
             (*len)--;
-	    (*buf)[(*len)] = '\0';
+	        (*buf)[(*len)] = '\0';
         }
         (*curr_pos)--;
         (*max_pos)--;
 
         // Updating the display in the terminal
     	printf("\033[%dG", (*curr_pos) + 3);
-        printf("\033[K"); // Clear from cursor to end of line
-        if((command != NULL) && ((*command) != NULL)) {
-	    //printf("\033[%dG", (*curr_pos) + 3);
-            printf("\r> %s%s", *command/* + *curr_pos*/, *buf);
-        } else {
-            printf("\r> %s", *buf);
-        }
-        printf("\033[%dG", (*curr_pos) + 3); // Moving the cursor
+        update_display(*command, *buf, curr_pos, max_pos);
         fflush(stdout);
     }
     return;
@@ -258,7 +249,7 @@ int last_slash_buf(char **buf, int *buf_len, int *pos_space, int *curr_pos, int 
         }
         *prev_pos_space = i-1;
     }
-    while((buf) && (*buf) && (*buf)[i] != '\0') {
+    while((buf) && (*buf) && (*buf)[i] != '\0' && i < *curr_pos) {
         if((*buf)[i] == '/') {
 	        last_pos_slash = i;
 	    }
@@ -540,7 +531,7 @@ char *read_text()
             putchar('\n');
             fflush(stdout);
 	        return command;
-        } else if((c == 32) && (curr_pos == max_pos) && (flag == false)) {
+        } else if((c == 32) && (curr_pos == max_pos) && (flag == false) && (buf[0] != '\0')) {
             if(!tab_flag) {
                 command = incCommand(&command, buf, &n, &len, true);
             }
