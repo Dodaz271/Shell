@@ -100,7 +100,7 @@ bool search_separators(int *amount, int i, int *j, int **pos_separators, char **
 }
 
 // Function to handle pipeline execution
-void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands, int **pos_separators, int j, bool is_ampersand, int amount) {
+void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands, int **pos_separators, int j, bool is_ampersand, int amount, int fd) {
     int pipe_pid, p;
     pipe(pipe_fd); // Create a pipe
     pipe_pid = fork(); // Fork a new process
@@ -110,15 +110,17 @@ void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands
         close(*pipe_input); // Close the original pipe input
 
         // Check various conditions to decide if stdout should be redirected to the pipe
-        if(((((*pos_separators)[j] != -1) && 
+        if((fd == -2) && (((((*pos_separators)[j] != -1) && 
              ((strcmp(arr_commands[(*pos_separators)[j]], "|") == 0) || 
               (strcmp(arr_commands[(*pos_separators)[j-1]], "|") == 0))) || 
             (((*pos_separators)[j-1] == (amount-1)) && 
              ((*pos_separators)[j] == -1) && 
              (strcmp(arr_commands[(*pos_separators)[j-1]], "|") == 0))) || 
            (strcmp(arr_commands[(*pos_separators)[j-1]], ">") == 0) || 
-           (strcmp(arr_commands[(*pos_separators)[j-1]], ">>") == 0)){
+           (strcmp(arr_commands[(*pos_separators)[j-1]], ">>") == 0))) {
             dup2(pipe_fd[1], 1); // Redirect stdout to the writing end of the pipe
+        } else if(fd > 0) {
+            dup2(fd, 1);
         }
 
         close(pipe_fd[0]); // Close the reading end in the child
@@ -265,7 +267,7 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
 // Function to execute the parsed command
 void exec_command(char **arr_commands, int count, int *size, int **pos_separators)
 {
-    int i, fd, j = 0, n = 0, amount = 0, vol = 0, k, pipe_fd[2], pipe_input = 0, u = 0;
+    int i, fd = -2, j = 0, n = 0, amount = 0, vol = 0, k, pipe_fd[2], pipe_input = 0, u = 0;
     char **token = NULL;
     bool input_flag, output_flag, is_ampersand, pipe_flag;
 
@@ -298,7 +300,9 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
             }
             // Iterate through tokens and add them
             for (i = amount; i < count; i++) {
-                add_tokens(&token, i, pos_separators, &n, j, arr_commands); // Add tokens to the current command
+                if(vol > 0) {
+                    add_tokens(&token, i, pos_separators, &n, j, arr_commands); // Add tokens to the current command
+                }
                 if (search_separators(&amount, i, &j, pos_separators, arr_commands, &is_ampersand, &input_flag, &output_flag, &fd, &pipe_flag, size)) {
                     break; // If a separator is found, stop adding tokens
                 }
@@ -333,7 +337,11 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
             amount++; // Move to the next command
             input_flag = output_flag = false; // Reset flags
         } else if((pipe_flag) && (token)){ // If it's a pipe, handle pipeline
-            pipeline(pipe_fd, token, &pipe_input, arr_commands, pos_separators, j, is_ampersand, amount);
+            pipeline(pipe_fd, token, &pipe_input, arr_commands, pos_separators, j, is_ampersand, amount, fd);
+            close(pipe_fd[1]);
+            /*if(fd > 2) {
+                amount++;
+            }*/
             // Handle specific cases where the pipe should be closed
             if((((*pos_separators)[j] == -1) && 
                 ((amount-1) > ((*pos_separators)[j-1]))) || 
@@ -342,6 +350,9 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
                  !output_flag && !input_flag))) {
                 close(pipe_input); // Close the reading end of the pipe
                 amount++; // Move to the next command
+            }
+            if(fd > 2) {
+                amount++;
             }
         }
 
