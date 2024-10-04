@@ -1,65 +1,173 @@
 #include "read_commands.h"
 
-void add_element(int **pos_separators, int *size, int new_value) {
-    int *temp = (int*)malloc(((*size) + 2) * sizeof(int));
-    int i;
-    if (temp == NULL) {
-        printf("Memory reallocation failed\n");
-        free(pos_separators);
-        exit(1);
-    }
-    if((*size > 0) && (new_value == (*pos_separators)[*size-1])) {
-	    free(temp);
-    	return;
-    }
-    for(i = 0; i < (*size); i++) {
-	    if(new_value == (*pos_separators)[i]) {
-	        free(temp);
-    	    return;
-	    }
-        temp[i] = (*pos_separators)[i];
-    }
-    if(*size > 0) {
-        free(*pos_separators);
-    }
-    temp[*size] = new_value;
-    (*size)++;
-    temp[*size] = -1;
-    *pos_separators = temp;
-    return;
-}
-
-bool separators(char *str, int n, bool flag, int **pos_separators, int *count, int *size, int pos_next_word)
-{
-    const char *separators[] = {"&", "&&", ">", "<", ">>", "|", "||", ";", "(", ")"};
-    if((str[n] == '\n') || (str[n] == ' ') || (str[n+1] == '\0')) {
-	    if((flag == false) && (str != NULL)) {
-	        for(int i = 0; i < 10; i++) {
-                if(strncmp(separators[i], str + n - 1, pos_next_word - n + 1) == 0) {
-                    add_element(pos_separators, size, (*count));
-                }
-	        }
-	    }
-        if((str[n-1] != ' ') || ((str[n] != ' ') && (str[n+1] == '\0'))) {
-            (*count)++;
+// Function to check if a single character is a separator
+bool is_single_char_separator(char c) {
+    const char char_separators[] = {'&', '>', '<', '|', ';', '(', ')'};
+    int num_char_separators = sizeof(char_separators) / sizeof(char_separators[0]);
+    for(int i = 0; i < num_char_separators; i++) {
+        if(char_separators[i] == c) {
+            return true;
         }
-        return true;
     }
     return false;
 }
 
-
-char *newArray(char *str, int n, int arr_size)
-{
-    char *newArray = (char*)malloc(arr_size * sizeof(char));
-    int i;
-    for(i = 0; i < n; i++) {
-        newArray[i] = str[i];
+// Function to add a new element to pos_separators
+void add_element(int **pos_separators, int *size, int new_value) {
+    int *temp = (int*)malloc(((*size) + 2) * sizeof(int)); // +1 for new element, +1 for sentinel
+    if (temp == NULL) {
+        printf("Memory allocation failed\n");
+        free(*pos_separators); // Correctly free the original array
+        exit(1);
     }
-    free(str);
+
+    // Copy existing elements
+    for(int i = 0; i < *size; i++) {
+        temp[i] = (*pos_separators)[i];
+    }
+
+    // Add the new element
+    temp[*size] = new_value;
+    (*size)++;
+
+    // Add sentinel value
+    temp[*size] = -1;
+
+    // Free the old array if it exists
+    if(*size > 1) { // Only free if there was a previous allocation
+        free(*pos_separators);
+    }
+
+    *pos_separators = temp;
+}
+
+// Function to check and handle separators at current position
+bool is_separator_at_pos(char *str, int pos, int *matched_length) {
+    // Define all separators, including multi-character ones
+    const char *separators_list[] = {"&&", "||", ">>", "&", ">", "<", "|", ";", "(", ")"};
+    const int num_separators = sizeof(separators_list) / sizeof(separators_list[0]);
+    for(int i = 0; i < num_separators; i++) {
+        int sep_len = strlen(separators_list[i]);
+        if(strncmp(separators_list[i], str + pos, sep_len) == 0) {
+            *matched_length = sep_len;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Function to add commands and separators to arr_commands
+char **inc_command_array(char *str, int pos_prev_word, int pos_next_word, char ***arr_commands, int count, bool is_separator) {
+    // Allocate memory for the new array (count + 2 for the new command and NULL terminator)
+    char **newArray = realloc(*arr_commands, (count + 2) * sizeof(char*));
+    if (newArray == NULL) {
+        perror("Realloc failed");
+        exit(EXIT_FAILURE);
+    }
+    *arr_commands = newArray;
+
+    // Allocate memory for the new command
+    int length = pos_next_word - pos_prev_word;
+    (*arr_commands)[count] = malloc((length + 1) * sizeof(char));
+    if((*arr_commands)[count] == NULL) {
+        perror("Malloc failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Copy the substring
+    strncpy((*arr_commands)[count], str + pos_prev_word, length);
+    (*arr_commands)[count][length] = '\0'; // Null-terminate
+
+    // Optionally, trim leading spaces if not a separator
+    if(!is_separator) {
+        // Trim leading spaces
+        int start = 0;
+        while((*arr_commands)[count][start] == ' ') start++;
+        if(start > 0) {
+            memmove((*arr_commands)[count], (*arr_commands)[count] + start, length - start + 1);
+        }
+    }
+
+    // Null-terminate the array
+    (*arr_commands)[count + 1] = NULL;
+
     return newArray;
 }
 
+// Function to parse commands from the input string
+char *read_commands(char *str, bool *flag, int *count, int **pos_separators, int *size, char ***arr_commands) {
+    int pos_next_word = 0, n = 0, pos_prev_word = 0;
+    int max_capacity = strlen(str);
+    bool is_quotes = false;
+
+    while(str[n] != '\0') {
+        // Handle quotes
+        if(str[n] == '"' && (n == 0 || str[n-1] != '\\')) {
+            is_quotes = !is_quotes;
+            // Remove the quote from the string
+            memmove(&str[n], &str[n+1], max_capacity - n);
+            max_capacity--;
+            continue;
+        }
+
+        // If not inside quotes, check for separators
+        if(!is_quotes) {
+            int matched_length = 0;
+            if(is_separator_at_pos(str, n, &matched_length)) {
+                // Add the preceding command if any
+                if(n > pos_prev_word) {
+                    *arr_commands = inc_command_array(str, pos_prev_word, n, arr_commands, *count, false);
+                    (*count)++;
+                }
+
+                // Add the separator
+                *arr_commands = inc_command_array(str, n, n + matched_length, arr_commands, *count, true);
+                (*count)++;
+
+                // Record the separator position
+                add_element(pos_separators, size, *count - 1); // Assuming *count -1 is the separator's index
+
+                // Move the position forward
+                n += matched_length;
+                pos_prev_word = n;
+                continue;
+            }
+
+            // Handle spaces
+            if(str[n] == ' ') {
+                // Add the preceding command if any
+                if(n > pos_prev_word) {
+                    *arr_commands = inc_command_array(str, pos_prev_word, n, arr_commands, *count, false);
+                    (*count)++;
+                }
+                pos_prev_word = n + 1;
+                n++;
+                continue;
+            }
+        }
+
+        // Handle escaped characters (e.g., \ )
+        if(str[n] == '\\' && str[n+1] != '\0') {
+            // Remove the escape character
+            memmove(&str[n], &str[n+1], max_capacity - n);
+            max_capacity--;
+            // Optionally, handle the escaped character
+            // For simplicity, we skip this in the current implementation
+        } else {
+            n++;
+        }
+    }
+
+    // Add the last command if any
+    if(n > pos_prev_word) {
+        *arr_commands = inc_command_array(str, pos_prev_word, n, arr_commands, *count, false);
+        (*count)++;
+    }
+
+    return str;
+}
+
+// Helper function to calculate the length of the string
 int str_capacity(char *str)
 {
     int i = 0;
@@ -67,95 +175,4 @@ int str_capacity(char *str)
         i++;
     }
     return i;
-}
-
-char **inc_command_array(char *str, int pos_prev_word, int pos_next_word, char ***arr_commands, int count) {
-    // Allocate memory for the new array (count + 1 for the new command and NULL terminator)
-    char **newArray = malloc((count + 1) * sizeof(char*));
-    if (newArray == NULL) {
-        // Return NULL if allocation fails
-        return NULL;
-    }
-
-    int i = 0, j = 0, n = pos_prev_word;
-
-    // Skip leading space if present
-    if (str[n] == ' ') {
-        n++;
-    }
-
-    // Copy existing commands into the new array
-    while ((arr_commands != NULL) && (i < count-1)) {
-        newArray[i] = (*arr_commands)[i];
-        i++;
-    }
-
-    // Allocate memory for the new command and copy it from the string
-    newArray[i] = malloc((pos_next_word - pos_prev_word + 1) * sizeof(char));
-    if (newArray[i] == NULL) {
-        // If allocation fails, free previously allocated memory
-        for (int k = 0; k < i; k++) {
-            free(newArray[k]);
-        }
-        free(newArray);
-        return NULL;
-    }
-
-    // Copy the string into the new command
-    for (j = 0; j < (pos_next_word - (pos_prev_word == 0 ? pos_prev_word : pos_prev_word+1)); j++) {
-        newArray[i][j] = str[n];
-        n++;
-    }
-    newArray[i][j] = '\0';  // Null-terminate the new command
-
-    // Mark the end of the array with NULL
-    newArray[count] = NULL;
-
-    // Free the old array memory (not the strings themselves, as they are copied)
-    free(*arr_commands);
-    
-    return newArray;
-}
-
-
-char *read_commands(char *str, bool *flag, int *count, int **pos_separators, int *size, char ***arr_commands)
-{
-    int pos_next_word = 0, n = 0, pos_prev_word = -1;
-    int max_capacity = 0, count_quotes = 0;
-    bool is_quotes = false;
-    max_capacity = str_capacity(str); 
-    while(str[n] != '\0') {
-        if((((str != NULL) && (n > 0) && (str[n-1] != '\\')) || (str == NULL)) && (str[n] == '"')) {
-            *flag = !(*flag);
-            is_quotes = *flag;
-            memmove(&str[n], &str[n+1], max_capacity - n);
-        }
-        if (n > pos_next_word) {
-            pos_prev_word = pos_next_word;
-            do {
-                pos_next_word++;
-                if(str[pos_next_word] == '"' && str[pos_next_word-1] != '\\') {
-                    is_quotes = !is_quotes;
-                    count_quotes++;
-                }
-            } while((str[pos_next_word] != '\0') &&
-                   ((is_quotes && str[pos_next_word] != '\0') ||  // Inside quotes, move forward
-                    (!is_quotes && (str[pos_next_word] != ' ' || (str[pos_next_word - 1] == ' ')))  // Outside quotes
-                   ));
-            pos_next_word = pos_next_word - count_quotes;
-            count_quotes = 0;
-        }
-        if(str[n-1] == '\\') {
-            memmove(&str[n-1], &str[n], max_capacity - n);
-            pos_next_word--;
-        }
-        if(*flag == false) {
-            if(separators(str, n, *flag, pos_separators, count, size, pos_next_word)) {
-                (*arr_commands) = inc_command_array(str, pos_prev_word, pos_next_word, arr_commands, *count);
-            }
-        }
-        n++;
-    }
-    //(*count)++;
-    return str;
 }

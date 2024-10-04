@@ -1,3 +1,6 @@
+#ifndef EDITOR_H
+#define EDITOR_H
+
 #include <stdio.h>
 #include <string.h>
 #include <termios.h>
@@ -22,3 +25,5 @@ int last_slash_buf(char **buf, int *buf_len, int *pos_space, int *curr_pos, int 
 char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_pos, int *curr_pos, int *tab_press_count);
 char *read_text();
 void enable_canon_mode(struct termios *origin_termios);
+
+#endif

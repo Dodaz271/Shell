@@ -98,15 +98,16 @@ char *incBuf(char **buf, int *buf_size, int additional_len)
     int i;
     char *newArray = malloc(new_size * sizeof(char));
     if (newArray == NULL) {
-        free(*buf);
         return NULL;
     }
     for(i = 0; i < *buf_size; i++) {
         newArray[i] = (*buf)[i];
     }
     newArray[*buf_size] = '\0';
-    free(*buf);
-    //free(buf);
+    if (*buf != NULL) {
+        free(*buf);
+        *buf = NULL;  // Set to NULL to avoid double-free
+    }
     return newArray;
 }
 
@@ -262,6 +263,15 @@ int last_slash_buf(char **buf, int *buf_len, int *pos_space, int *curr_pos, int 
     return last_pos_slash;
 }
 
+bool matchExists(char **matches, int match_count, const char *new_match) {
+    for (int i = 0; i < match_count; i++) {
+        if (strcmp(matches[i], new_match) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_pos, int *curr_pos, int *tab_press_count)
 {
     int last_pos_slash = 0, path_len, pos_space = -1, additional_len, prev_pos_space = 0;
@@ -275,8 +285,13 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
         last_pos_slash = last_slash_buf(&command, n, &pos_space, curr_pos, &prev_pos_space);
     }
     if(last_pos_slash == -1) {
-        path = strdup("./");
-	    path_len = 2;
+        if(*n > 0) {
+            path = strdup("./");
+	        path_len = 2;
+        }
+        if((*n > 1) && (command[0] == 'c') && (command[1] == 'd')) {
+            last_pos_slash = -2;
+        }
     } else {
         path = malloc((last_pos_slash + 2) * sizeof(char));
     	if((*curr_pos) > *n) {
@@ -288,7 +303,9 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
         }
         path[path_len] = '\0';
     }
-    dir = opendir(path);
+    if(path != NULL) {
+        dir = opendir(path);
+    }
     if (!dir) {
         perror(path);
         return command;
@@ -298,65 +315,93 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
     char **matches = NULL;
     size_t match_count = 0;
     size_t match_capacity = 0;
+    
+    if((*n == 0) && (last_pos_slash == -1)) {
+        char *path_env = getenv("PATH");
+        char *path_copy = strdup(path_env);
+        char *token = strtok(path_copy, ":");
 
-    // Read the directory and look for matches
-    while ((dent = readdir(dir)) != NULL) {
-        // Skip the current and parent directory entries ("." and "..")
-        if ((strcmp(dent->d_name, ".") == 0) || (strcmp(dent->d_name, "..") == 0)) {
-            continue;
-        }
-
-        // Allocate memory for the full path by appending the directory entry name
-	    newPath(&path, dent, path_len);
-
-        // Use stat() to get file status; return command if stat fails
-        if ((stat(path, &file_stat)) != 0) {
-            for (i = 0; i < match_count; i++) {
-                free(matches[i]);
+        while (token != NULL) {
+            dir = opendir(token);
+            if (dir) {
+                while ((dent = readdir(dir)) != NULL) {
+                    if (dent->d_type == DT_REG || dent->d_type == DT_LNK) {
+                        if (!(matchExists(matches, match_count, dent->d_name))) {
+                            if (strncmp(dent->d_name, *buf, buf_len + 1) == 0) {
+                                if (match_count == match_capacity) {
+                                    match_capacity = (match_capacity == 0) ? 10 : match_capacity * 2;
+                                    matches = realloc(matches, match_capacity * sizeof(char *));
+                                }
+                                matches[match_count] = strdup(dent->d_name);
+                                match_count++;
+                            }
+                        }
+                    }
+                }
+                closedir(dir);
             }
-            free(matches);
-            if(last_pos_slash != -1) {
-                free(path);
-            }
-            closedir(dir);
-            return command;
+            token = strtok(NULL, ":");
         }
+        free(path_copy);
+    } else {
+        // Read the directory and look for matches
+        while ((dent = readdir(dir)) != NULL) {
+            // Skip the current and parent directory entries ("." and "..")
+            if ((strcmp(dent->d_name, ".") == 0) || (strcmp(dent->d_name, "..") == 0)) {
+                continue;
+            }
 
-        // Check if the directory entry matches the buffer and is a directory or executable
-        if ((((*curr_pos > *n) && (strncmp(dent->d_name, *buf + last_pos_slash + 1, buf_len - last_pos_slash) == 0))                                || ((*curr_pos < *n) && (strncmp(dent->d_name, command + last_pos_slash + 1, pos_space - last_pos_slash - 1) == 0)))
-            && (S_ISDIR(file_stat.st_mode) || (file_stat.st_mode & S_IXUSR))) {
+            // Allocate memory for the full path by appending the directory entry name
+	        newPath(&path, dent, path_len);
+
+            // Use stat() to get file status; return command if stat fails
+            if ((stat(path, &file_stat)) != 0) {
+                for (i = 0; i < match_count; i++) {
+                    free(matches[i]);
+                }
+                free(matches);
+                if(last_pos_slash != -1) {
+                    free(path);
+                }
+                closedir(dir);
+                return command;
+            }
+    
+            // Check if the directory entry matches the buffer and is a directory or executable
+            if ((((*curr_pos > *n) && (strncmp(dent->d_name, *buf + ((last_pos_slash == -2) ? 0 : (last_pos_slash + 1)), buf_len - ((last_pos_slash == -2) ? -1 : (last_pos_slash))) == 0))                                || ((*curr_pos < *n) && (strncmp(dent->d_name, command + last_pos_slash + 1, pos_space - last_pos_slash - 1) == 0)))
+                && (((last_pos_slash != -1) && (S_ISDIR(file_stat.st_mode) || (file_stat.st_mode & S_IXUSR))) 
+                || ((last_pos_slash == -1) && (!S_ISDIR(file_stat.st_mode))))) {
             
-            // Reallocate the matches array if capacity is exceeded
-            if (match_count == match_capacity) {
-                match_capacity = (match_capacity == 0) ? 10 : match_capacity * 2;
-                matches = realloc(matches, match_capacity * sizeof(char *));
-            }
-
-            // Duplicate the directory entry name into the matches array
-            matches[match_count] = strdup(dent->d_name);
-            if (matches[match_count] != NULL) {
-                size_t len = strlen(matches[match_count]);
-
-                // Reallocate the memory to add '/' for directories
-                matches[match_count] = realloc(matches[match_count], len + 2); // +2 for '/' and '\0'
-                if (matches[match_count] == NULL) {
-                    perror("Memory reallocation failed");
-                    exit(EXIT_FAILURE);
+                // Reallocate the matches array if capacity is exceeded
+                if (match_count == match_capacity) {
+                    match_capacity = (match_capacity == 0) ? 10 : match_capacity * 2;
+                    matches = realloc(matches, match_capacity * sizeof(char *));
                 }
 
-                // If it's a directory, append '/' to the entry name
-                if (S_ISDIR(file_stat.st_mode)) {
-                    matches[match_count][len] = '/';
-                    matches[match_count][len + 1] = '\0';
-		        }
-            }
-            match_count++;
-        }
-    }
-    
-    // Close the directory stream
-    closedir(dir);
+                // Duplicate the directory entry name into the matches array
+                matches[match_count] = strdup(dent->d_name);
+                if (matches[match_count] != NULL) {
+                    size_t len = strlen(matches[match_count]);
 
+                    // Reallocate the memory to add '/' for directories
+                    matches[match_count] = realloc(matches[match_count], len + 2); // +2 for '/' and '\0'
+                    if (matches[match_count] == NULL) {
+                        perror("Memory reallocation failed");
+                        exit(EXIT_FAILURE);
+                    }
+    
+                    // If it's a directory, append '/' to the entry name
+                    if (S_ISDIR(file_stat.st_mode)) {
+                        matches[match_count][len] = '/';
+                        matches[match_count][len + 1] = '\0';
+		            }
+                }
+                match_count++;
+            }
+        }
+        // Close the directory stream
+        closedir(dir);
+    }
     if (match_count == 0) {
         // No match
         return command;
@@ -364,22 +409,22 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
         // Only one match — complete the line completely
         size_t match_len = strlen(matches[0]);
 	    if(*curr_pos > *n) {
-            additional_len = match_len - buf_len + last_pos_slash;
+            additional_len = match_len - buf_len + (last_pos_slash == -2 ? -1 : last_pos_slash);
 	    } else {
-	        additional_len = match_len - pos_space + last_pos_slash;
+	        additional_len = match_len - pos_space + (last_pos_slash == -2 ? -1 : last_pos_slash);
 	    }
         if (additional_len > 0) {
 	        if(*curr_pos > *n) {
                 *buf = incBuf(buf, len, additional_len);
-                memcpy(*buf + *len, matches[0] + buf_len - last_pos_slash, additional_len);
+                memcpy(*buf + *len, matches[0] + buf_len - (last_pos_slash == -2 ? -1 : last_pos_slash), additional_len);
                 *len += additional_len;
                 (*buf)[*len] = '\0';
 		        // Update the display in the terminal
-                printf("%s", matches[0] + buf_len - last_pos_slash);
+                printf("%s", matches[0] + buf_len - (last_pos_slash == -2 ? -1 : last_pos_slash));
                 if ((stat(*buf, &file_stat)) != 0) {
                     return command;
                 }
-                if((file_stat.st_mode & S_IXUSR) && (!S_ISDIR(file_stat.st_mode))) {
+                if((!S_ISDIR(file_stat.st_mode))) {
                     putchar(' ');
                     command = incCommand(&command, *buf, n, len, true);
                     (*max_pos)++;
@@ -436,6 +481,7 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
 
             size_t additional_len = prefix_len - (buf_len - last_pos_slash);
             if (additional_len > 0) {
+                *buf = incBuf(buf, len, additional_len);
                 memcpy(*buf + *len, matches[0] + buf_len - last_pos_slash, additional_len);
                 *len += additional_len;
                 (*buf)[*len] = '\0';
@@ -468,7 +514,7 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
         free(matches[i]);
     }
     free(matches);
-    if(last_pos_slash != -1) {
+    if(path != NULL) {
         free(path);
     }
     return command;
@@ -488,6 +534,7 @@ char *read_text()
     char esc_seq[6];
     int esc_seq_index = 0;
 
+    write(1, "> ", 2);
     while (read(0, &c, 1) > 0) {
         if (c == '\033') { // Start of escape sequence
             esc_seq[0] = c;
@@ -539,8 +586,10 @@ char *read_text()
             max_pos++;
             write(1, &c, 1);
 	    } else if (c == '\t') { // Tab
-	        tab_press_count++;
-            command = handleTabCompletion(&buf, &len, command, &n, &max_pos, &curr_pos, &tab_press_count);
+            if(buf[0] != '\0') {
+	            tab_press_count++;
+                command = handleTabCompletion(&buf, &len, command, &n, &max_pos, &curr_pos, &tab_press_count);
+            }
         } else if (c == 127 || c == '\b') { // Backspace
             remove_and_refresh(&curr_pos, &max_pos, &buf, &command, &n, &len);
         } else if (c == 23) { // Ctrl+W

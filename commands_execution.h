@@ -1,7 +1,11 @@
+#ifndef COMMANDS_EXECUTION_H
+#define COMMANDS_EXECUTION_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <sys/wait.h>
+#include <sys/ptrace.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -16,3 +20,5 @@ void add_tokens(char ***token, int i, int **pos_separators, int *n, int j, char 
 void execute_single_command(char **token, bool input_flag, bool output_flag, int fd, bool is_ampersand, int pipe_fd[2], int *pipe_input, int j, int **pos_separators, char **arr_commands);
 void exec_command(char **arr_commands, int count, int *size, int **pos_separators);
 
+
+#endif // COMMANDS_EXECUTION_H

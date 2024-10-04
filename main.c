@@ -31,9 +31,6 @@ int main()
     int **pos_separators = malloc(sizeof(int)), size = 0;
     int i = 0;
     enable_canon_mode(&origin_termios);
-    //printf("TODO: fix memory leak\n");
-    printf("> ");
-    fflush(stdout);
     while((str = read_text()) != NULL) {
 	    str = read_commands(str, &flag, &count, pos_separators, &size, &arr_commands);
 	    if(flag == true) {
@@ -42,8 +39,7 @@ int main()
 		    str = NULL;
 	    }
 	    flag = false;
-	    if(str) {
-    		//arr_commands = command_array(str, count);
+	    if((str) && (str[0] != '\0')) {
 		    if(arr_commands) {
 		        exec_command(arr_commands, count, &size, pos_separators);
 		    }
@@ -58,10 +54,8 @@ int main()
             }
 		    free(arr_commands); 
             arr_commands = NULL;
-            free(str);
 	    }
-        printf("> ");
-        fflush(stdout);
+        free(str);
 	}
     free_all_alloc_mem(str, &arr_commands, pos_separators);
     putchar('\n');
