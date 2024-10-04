@@ -130,6 +130,9 @@ void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands
     }
 
     close(pipe_fd[1]); // Close the writing end in the parent
+    if(*pipe_input > 2) {
+        close(*pipe_input);
+    }
     *pipe_input = pipe_fd[0]; // Update pipe_input to the reading end for the next command
     if (!is_ampersand) { // If not running in background
         do {
