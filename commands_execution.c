@@ -1,5 +1,27 @@
 #include "commands_execution.h"
 
+void temporarily_ignore_SIGTTOU(bool off_sigttou, struct sigaction *sa, struct sigaction *old_sa) {
+    // Check if we want to ignore SIGTTOU
+    if (off_sigttou) {
+        sa->sa_handler = SIG_IGN;  // Set the signal handler to ignore the signal
+        sigemptyset(&sa->sa_mask);  // Initialize the signal mask to not block any signals
+        sa->sa_flags = 0;  // Set additional options to zero
+
+        // Set the new signal handler and save the old one
+        if (sigaction(SIGTTOU, sa, old_sa) == -1) {
+            perror("sigaction");  // Print an error message if sigaction fails
+            exit(EXIT_FAILURE);    // Exit the program with failure status
+        }
+    } else {
+        // Restore the old signal handler for SIGTTOU
+        if (sigaction(SIGTTOU, old_sa, NULL) == -1) {
+            perror("sigaction");  // Print an error message if sigaction fails
+            exit(EXIT_FAILURE);    // Exit the program with failure status
+        }
+    }
+    return;  // Return from the function
+}
+
 // Function to change the current working directory
 void change_dir(char **arr_commands) {
     // If no argument is provided to 'cd', change to the HOME directory
@@ -100,12 +122,29 @@ bool search_separators(int *amount, int i, int *j, int **pos_separators, char **
 }
 
 // Function to handle pipeline execution
-void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands, int **pos_separators, int j, bool is_ampersand, int amount, int fd) {
+void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands, int **pos_separators, int j, bool is_ampersand, int amount, int fd, int *pgid) {
     int pipe_pid, p;
+    struct sigaction sa;
+    struct sigaction old_sa;
+
     pipe(pipe_fd); // Create a pipe
-    pipe_pid = fork(); // Fork a new process
+
+    pipe_pid = fork(); // Fork a new process 
 
     if(pipe_pid == 0) { // Child process
+        if((*pgid) == -1) {
+            *pgid = pipe_pid;
+            setpgid(pipe_pid, *pgid);
+            if(!is_ampersand) {
+                tcsetpgrp(0, *pgid);
+            }
+        } else if((*pgid) != -1){
+            setpgid(pipe_pid, *pgid);
+            if(!is_ampersand) {
+                tcsetpgrp(0, *pgid);
+            }
+        }
+
         dup2(*pipe_input, 0); // Redirect stdin to the reading end of the previous pipe
         close(*pipe_input); // Close the original pipe input
 
@@ -129,19 +168,35 @@ void pipeline(int pipe_fd[2], char **token, int *pipe_input, char **arr_commands
         execvp(token[0], token); // Execute the command
         perror(token[0]); // Print error if execvp fails
         exit(1); // Exit child process with error code
-    }
+    } else {
+        if((*pgid) == -1) {
+            *pgid = pipe_pid;
+            setpgid(pipe_pid, *pgid);
+            if(!is_ampersand) {
+                tcsetpgrp(0, *pgid);
+            }
+        } else if((*pgid) != -1){
+            setpgid(pipe_pid, *pgid);
+            if(!is_ampersand) {
+                tcsetpgrp(0, *pgid);
+            }
+        }
 
-    close(pipe_fd[1]); // Close the writing end in the parent
-    if(*pipe_input > 2) {
-        close(*pipe_input);
-    }
-    *pipe_input = pipe_fd[0]; // Update pipe_input to the reading end for the next command
-    if (!is_ampersand) { // If not running in background
-        do {
-            p = wait(NULL); // Wait for the child process to finish
-        } while (p != pipe_pid);
-    } else { // If running in background
-        printf("Process running in background with PID %d\n", pipe_pid);
+        close(pipe_fd[1]); // Close the writing end in the parent
+        if(*pipe_input > 2) {
+            close(*pipe_input);
+        }
+        *pipe_input = pipe_fd[0]; // Update pipe_input to the reading end for the next command
+        if (!is_ampersand) { // If not running in background
+            do {
+                p = wait(NULL); // Wait for the child process to finish
+            } while (p != pipe_pid);
+            temporarily_ignore_SIGTTOU(true, &sa, &old_sa);
+            tcsetpgrp(0, getpgid(0));
+            temporarily_ignore_SIGTTOU(false, &sa, &old_sa);
+        } else { // If running in background
+            printf("Process running in background with PID %d\n", pipe_pid);
+        }
     }
     return;
 }
@@ -163,23 +218,18 @@ int size_of_token(int count, int amount, int **pos_separators, int j, int *size)
 // Function to add tokens to the current command
 void add_tokens(char ***token, int i, int **pos_separators, int *n, int j, char **arr_commands)
 {
-    if (i != ((*pos_separators)[j])) { // If current index is not a separator
-        (*token)[*n] = strdup(arr_commands[i]); // Duplicate the token
-        (*n)++; // Increment token count
-    } else { // If current index is a separator
-        if((*n) > 0) {
-            (*token)[*n] = NULL; // Null-terminate the token array
-            *n = 0; // Reset token count
-        } else {
-            (*token) = NULL; // Set token to NULL if no tokens are present
-        }
-    }
+    (*token)[*n] = strdup(arr_commands[i]); // Duplicate the token
+    (*n)++; // Increment token count
+    (*token)[*n] = NULL;
     return;
 }
 
 // Function to execute a single command with possible redirections and pipes
-void execute_single_command(char **token, bool input_flag, bool output_flag, int fd, bool is_ampersand, int pipe_fd[2], int *pipe_input, int j, int **pos_separators, char **arr_commands) {
-    int pid, p, rc;
+void execute_single_command(char **token, bool input_flag, bool output_flag, int *fd, bool is_ampersand, int pipe_fd[2], int *pipe_input, int j, int **pos_separators, char **arr_commands) {
+    
+    struct sigaction sa;
+    struct sigaction old_sa;
+    int pid, p, rc, status, shell_pgid = getpgid(0);
     char buf[1024];
 
     // If output redirection is set and the previous separator was a pipe
@@ -196,28 +246,40 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
         return;
     }
     if (pid == 0) { // Child process
+
+        if (setpgid(0, 0) == -1) {
+            perror("setpgid");
+            exit(EXIT_FAILURE);
+        }
+
+        if(!is_ampersand) {
+            if (tcsetpgrp(0, getpgrp()) == -1) {
+                perror("tcsetpgrp");
+            }
+        }
+
         // Handle output redirection
         if (output_flag) { 
             // If previous separator was a pipe
             if ((strcmp(arr_commands[(*pos_separators)[j-2]], "|") == 0)) {
-                if (fd != -1) { // If file descriptor is valid
-                    while((rc = read(*pipe_input, buf, sizeof(buf))) > 0) { // Read from stdin and write to stdout
-                        write(fd, buf, rc);
+                if (*fd != -1) { // If file descriptor is valid
+                    while((rc = read(*pipe_input, buf, sizeof(buf))) > 0) {
+                        write(*fd, buf, rc);
                     }
                     close(*pipe_input);
                     exit(1);
                 }
                 close(*pipe_input);
             } else { // If not a pipe
-                dup2(fd, 1); // Redirect stdout to the file
-                close(fd); // Close the original file descriptor
+                dup2(*fd, 1); // Redirect stdout to the file
+                close(*fd); // Close the original file descriptor
             }
         }
 
         // Handle input redirection
         if (input_flag) { //< If input_flag is set
-            dup2(fd, 0); // Redirect standard input to the file
-            close(fd); // Close the original file descriptor
+            dup2(*fd, 0); // Redirect standard input to the file
+            close(*fd); // Close the original file descriptor
             // If the next separator is a pipe, redirect output to the pipe
             if ((*pos_separators) && (*pos_separators)[j] != -1 && 
                 strcmp(arr_commands[(*pos_separators)[j]], "|") == 0) {
@@ -228,38 +290,72 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
             }
         }
 
-
         // Execute the command
         execvp(token[0], token); // Execute the command
         perror(token[0]); // Print error if execvp fails
         exit(EXIT_FAILURE); // Exit child process with failure
-    }
+    } 
 
-    // Parent process continues here
-    // If previous separator was a pipe, close pipe ends in the parent
-    if ((*pos_separators) && 
-        ((*pos_separators)[j] != -1) && 
-        (strcmp(arr_commands[(*pos_separators)[j]], "|") == 0)) {
+    if(pid > 0) {
 
-        close(pipe_fd[1]); // Close the writing end in the parent
-        *pipe_input = pipe_fd[0]; // Optionally pass the reading end for the next command
-    } else if(*pipe_input > 2) {
-        close(*pipe_input);
-    }
-
-    // Wait for the child process if not running in background
-    if ((!is_ampersand) && 
-        ((!(*pos_separators)) || 
-         ((*pos_separators) && 
-          (strcmp(arr_commands[(*pos_separators)[j-2]], "|") != 0)))) {
-        if(input_flag || output_flag) {
-            close(fd); // Close the original file descriptor
+        if (setpgid(pid, pid) == -1) {
+            perror("setpgid");
+            exit(EXIT_FAILURE);
         }
-        do {
-            p = wait(NULL); // Wait for any child process to finish
-        } while (p != pid); // Continue waiting until the specific child finishes
-    } else if(is_ampersand){ // If running in background
-        printf("Process running in background with PID %d\n", pid);
+
+        if(!is_ampersand) {
+            if (tcsetpgrp(0, pid) == -1) {
+                perror("tcsetpgrp");
+            }
+        }
+
+        // Parent process continues here
+        // If previous separator was a pipe, close pipe ends in the parent
+        if ((*pos_separators) && 
+            ((*pos_separators)[j] != -1) && 
+            (strcmp(arr_commands[(*pos_separators)[j]], "|") == 0)) {
+
+            close(pipe_fd[1]); // Close the writing end in the parent
+            *pipe_input = pipe_fd[0]; // Optionally pass the reading end for the next command
+        } else if(*pipe_input > 2) {
+            close(*pipe_input);
+        }
+
+        // Wait for the child process if not running in background
+        if ((!is_ampersand) && 
+            ((!(*pos_separators)) || 
+             ((*pos_separators) && 
+              (strcmp(arr_commands[(*pos_separators)[j-2]], "|") != 0)))) {
+            if(input_flag || output_flag) {
+                close(*fd); // Close the original file descriptor
+                *fd = -2;
+            }
+            do {
+                p = wait(&status); // Wait for any child process to finish
+            } while (p != pid); // Continue waiting until the specific child finishes
+            temporarily_ignore_SIGTTOU(true, &sa, &old_sa);
+            if (WIFSTOPPED(status)) {
+                printf("Child process stopped\n");
+                tcsetpgrp(0, shell_pgid);
+            } else if (tcsetpgrp(0, shell_pgid) == -1) {
+                perror("tcsetpgrp");
+            }
+            temporarily_ignore_SIGTTOU(false, &sa, &old_sa);
+            
+            if (p == -1) {
+                perror("waitpid");
+            } else {
+                if (WIFEXITED(status)) {
+                    printf("Process %d exited with status %d\n", pid, WEXITSTATUS(status));
+                } else if (WIFSIGNALED(status)) {
+                    printf("Process %d was killed by signal %d\n", pid, WTERMSIG(status));
+                } else if (WIFSTOPPED(status)) {
+                    printf("Process %d was stopped by signal %d\n", pid, WSTOPSIG(status));
+                }
+            } 
+        } else if(is_ampersand){ // If running in background
+            printf("Process running in background with PID %d\n", pid);
+        }
     }
     return;
 }
@@ -267,7 +363,7 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
 // Function to execute the parsed command
 void exec_command(char **arr_commands, int count, int *size, int **pos_separators)
 {
-    int i, fd = -2, j = 0, n = 0, amount = 0, vol = 0, k, pipe_fd[2], pipe_input = 0, u = 0;
+    int i, fd = -2, j = 0, n = 0, amount = 0, vol = 0, k, pipe_fd[2], pipe_input = 0, u = 0, pgid = -1;
     char **token = NULL;
     bool input_flag, output_flag, is_ampersand, pipe_flag;
 
@@ -300,11 +396,11 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
             }
             // Iterate through tokens and add them
             for (i = amount; i < count; i++) {
-                if(vol > 0) {
-                    add_tokens(&token, i, pos_separators, &n, j, arr_commands); // Add tokens to the current command
-                }
                 if (search_separators(&amount, i, &j, pos_separators, arr_commands, &is_ampersand, &input_flag, &output_flag, &fd, &pipe_flag, size)) {
                     break; // If a separator is found, stop adding tokens
+                }
+                if(vol > 0) {
+                    add_tokens(&token, i, pos_separators, &n, j, arr_commands); // Add tokens to the current command
                 }
                 amount++; // Move to the next token
             }
@@ -333,32 +429,36 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
 
         // If not a pipe, execute the single command
         if ((!pipe_flag) && (token)) {
-            execute_single_command(token, input_flag, output_flag, fd, is_ampersand, pipe_fd, &pipe_input, j, pos_separators, arr_commands);
-            amount++; // Move to the next command
+            execute_single_command(token, input_flag, output_flag, &fd, is_ampersand, pipe_fd, &pipe_input, j, pos_separators, arr_commands);
+            if((pos_separators) && (*pos_separators)) {
+                amount = i + 1; // Move to the next command
+                if(strcmp(arr_commands[(*pos_separators)[j-1]], "<") == 0) {
+                    amount++;
+                }
+            } else {
+                amount++;
+            }
             input_flag = output_flag = false; // Reset flags
         } else if((pipe_flag) && (token)){ // If it's a pipe, handle pipeline
-            pipeline(pipe_fd, token, &pipe_input, arr_commands, pos_separators, j, is_ampersand, amount, fd);
+            pipeline(pipe_fd, token, &pipe_input, arr_commands, pos_separators, j, is_ampersand, amount, fd, &pgid);
             close(pipe_fd[1]);
-            /*if(fd > 2) {
-                amount++;
-            }*/
             // Handle specific cases where the pipe should be closed
-            if((((*pos_separators)[j] == -1) && 
-                ((amount-1) > ((*pos_separators)[j-1]))) || 
-               (((*pos_separators)[j] == -1) && 
-                (strcmp(arr_commands[(*pos_separators)[j-1]], "|") != 0 && 
-                 !output_flag && !input_flag))) {
+            if((((*pos_separators)[j] == -1) && (amount >= ((*pos_separators)[j-1]))) || (((*pos_separators)[j] != -1) && (strcmp(arr_commands[(*pos_separators)[j-1]], "|") != 0))) {
                 close(pipe_input); // Close the reading end of the pipe
-                amount++; // Move to the next command
+                pgid = -1;
+                amount = i+1; // Move to the next command
+                if(strcmp(arr_commands[(*pos_separators)[j-1]], ">") == 0) {
+                    amount++;
+                }
             }
             if(fd > 2) {
-                amount++;
+                close(fd);
             }
         }
 
         // Reset pipe and ampersand flags
         pipe_flag = is_ampersand = false;
-
+        n = 0;
         // Free allocated memory for tokens
         if(token) {
             if(vol > 0) { // If tokens were allocated based on 'vol'

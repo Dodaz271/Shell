@@ -7,10 +7,12 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <stdbool.h>
+#include <errno.h>
 
 
 char *incCommand(char **command, char *buf, int *command_size, int *buf_size, bool is_space);

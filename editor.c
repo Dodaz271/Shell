@@ -1,7 +1,30 @@
 #include "editor.h"
 
-
 enum esc_subsequence { arrow_up, arrow_down, arrow_right, arrow_left, delete_key, unknown };
+
+struct termios origin_termios;
+const char message[] = "\nGood bye\n";
+void handler(int s)
+{
+    int save_errno = errno;
+    signal(SIGINT, handler);
+    write(1, message, sizeof(message)-1);
+    errno = save_errno;
+    tcsetattr(0, TCSANOW, &origin_termios);
+    exit(0);
+}
+
+
+void enable_canon_mode(struct termios *origin_termios)
+{
+    struct termios ts;
+    tcgetattr(0, origin_termios);
+    ts = *origin_termios;
+    ts.c_lflag &= ~(ICANON | ECHO);
+    ts.c_lflag |= ISIG;
+    tcsetattr(0, TCSANOW, &ts);
+    return;
+}
 
 void newPath(char **path, struct dirent *dent, int path_len)
 {
@@ -279,6 +302,12 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
     char *path = NULL;
     DIR *dir;
     struct dirent *dent;
+
+    struct winsize w;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+    int terminal_width = w.ws_col;  // Width of the terminal in columns
+    int max_name_len = 0, name_len = 0;
+
     if((*curr_pos) >= *n) {
         last_pos_slash = last_slash_buf(buf, len, &pos_space, curr_pos, &prev_pos_space);
     } else {
@@ -368,9 +397,9 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
             }
     
             // Check if the directory entry matches the buffer and is a directory or executable
-            if ((((*curr_pos > *n) && (strncmp(dent->d_name, *buf + ((last_pos_slash == -2) ? 0 : (last_pos_slash + 1)), buf_len - ((last_pos_slash == -2) ? -1 : (last_pos_slash))) == 0))                                || ((*curr_pos < *n) && (strncmp(dent->d_name, command + last_pos_slash + 1, pos_space - last_pos_slash - 1) == 0)))
+            if (((*buf)[0] == '\0') || ((((*curr_pos > *n) && (strncmp(dent->d_name, *buf + ((last_pos_slash == -2) ? 0 : (last_pos_slash + 1)), buf_len - ((last_pos_slash == -2) ? -1 : (last_pos_slash))) == 0))                                || ((*curr_pos < *n) && (strncmp(dent->d_name, command + last_pos_slash + 1, pos_space - last_pos_slash - 1) == 0)))
                 && (((last_pos_slash != -1) && (S_ISDIR(file_stat.st_mode) || (file_stat.st_mode & S_IXUSR))) 
-                || ((last_pos_slash == -1) && (!S_ISDIR(file_stat.st_mode))))) {
+                || ((last_pos_slash == -1) && (!S_ISDIR(file_stat.st_mode)))))) {
             
                 // Reallocate the matches array if capacity is exceeded
                 if (match_count == match_capacity) {
@@ -395,6 +424,10 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
                         matches[match_count][len] = '/';
                         matches[match_count][len + 1] = '\0';
 		            }
+                    name_len = strlen(matches[match_count]);
+                    if(name_len > max_name_len) {
+                        max_name_len = name_len;
+                    }
                 }
                 match_count++;
             }
@@ -495,8 +528,16 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
         } else {
             // Second Tab: Display all matches
             printf("\n");
+            max_name_len += 2;
+            int cols = terminal_width / max_name_len;
+            if (cols == 0) {
+                cols = 1;
+            }
             for (i = 0; i < match_count; i++) {
-                printf("%s ", matches[i]);
+                printf("%-*s", max_name_len, matches[i]);
+                if (((i + 1) % cols == 0) && (i < match_count -2)) {
+                    printf("\n");
+                }
             }
             printf("\n> ");
             if (command) {
@@ -523,6 +564,7 @@ char *handleTabCompletion(char **buf, int *len, char *command, int *n, int *max_
 
 char *read_text()
 {
+    //struct termios origin_termios;
     char *buf = malloc(sizeof(char));
     buf[0] = '\0';
     char *command = NULL;
@@ -534,6 +576,8 @@ char *read_text()
     char esc_seq[6];
     int esc_seq_index = 0;
 
+    enable_canon_mode(&origin_termios);
+    signal(SIGINT, handler);
     write(1, "> ", 2);
     while (read(0, &c, 1) > 0) {
         if (c == '\033') { // Start of escape sequence
@@ -577,6 +621,7 @@ char *read_text()
             // Print new prompt line
             putchar('\n');
             fflush(stdout);
+            tcsetattr(0, TCSANOW, &origin_termios);
 	        return command;
         } else if((c == 32) && (curr_pos == max_pos) && (flag == false) && (buf[0] != '\0')) {
             if(!tab_flag) {
@@ -586,10 +631,8 @@ char *read_text()
             max_pos++;
             write(1, &c, 1);
 	    } else if (c == '\t') { // Tab
-            if(buf[0] != '\0') {
-	            tab_press_count++;
-                command = handleTabCompletion(&buf, &len, command, &n, &max_pos, &curr_pos, &tab_press_count);
-            }
+	        tab_press_count++;
+            command = handleTabCompletion(&buf, &len, command, &n, &max_pos, &curr_pos, &tab_press_count);
         } else if (c == 127 || c == '\b') { // Backspace
             remove_and_refresh(&curr_pos, &max_pos, &buf, &command, &n, &len);
         } else if (c == 23) { // Ctrl+W
@@ -598,6 +641,7 @@ char *read_text()
             putchar('\n');
             free(command);
 	        free(buf);
+            tcsetattr(0, TCSANOW, &origin_termios);
             return NULL;
         } else {
 	        if(curr_pos > n) {
@@ -610,16 +654,7 @@ char *read_text()
         }
     }
     free(buf);
+    tcsetattr(0, TCSANOW, &origin_termios);
     return command;
 }
 
-void enable_canon_mode(struct termios *origin_termios)
-{
-    struct termios ts;
-    tcgetattr(0, origin_termios);
-    ts = *origin_termios;
-    ts.c_lflag &= ~(ICANON | ECHO);
-    ts.c_lflag |= ISIG;
-    tcsetattr(0, TCSANOW, &ts);
-    return;
-}

@@ -22,15 +22,25 @@ void free_all_alloc_mem(char *str, char ***arr_commands, int **pos_separators)
     return;
 }
 
+void find_pgid_shell() 
+{
+    int shell_pgid = getpid();
+    if (setpgid(shell_pgid, shell_pgid) == -1) {
+        perror("setpgid");
+        exit(1);
+    }
+    tcsetpgrp(0, shell_pgid);
+    return;
+}
+
 int main()
 {
-    struct termios origin_termios;
     char *str = NULL, **arr_commands = NULL;
     int count = 0;
     bool flag = false;
     int **pos_separators = malloc(sizeof(int)), size = 0;
     int i = 0;
-    enable_canon_mode(&origin_termios);
+    find_pgid_shell();
     while((str = read_text()) != NULL) {
 	    str = read_commands(str, &flag, &count, pos_separators, &size, &arr_commands);
 	    if(flag == true) {
@@ -57,8 +67,7 @@ int main()
 	    }
         free(str);
 	}
-    free_all_alloc_mem(str, &arr_commands, pos_separators);
+    free(pos_separators);
     putchar('\n');
-    tcsetattr(0, TCSANOW, &origin_termios);
     return 0;
 }
