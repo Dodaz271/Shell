@@ -26,31 +26,31 @@ int main()
     int i = 0;
     find_pgid_shell();
     while((str = read_text()) != NULL) {
-	    str = read_commands(str, &flag, &count, pos_separators, &size, &arr_commands);
-	    if(flag == true) {
-    		printf("Error: Unclosed quotes\n");
-	    	free(str);
-		    str = NULL;
+        str = read_commands(str, &flag, &count, pos_separators, &size, &arr_commands);
+	if(flag == true) {
+    	    printf("Error: Unclosed quotes\n");
+	    free(str);
+	    str = NULL;
+        }
+	flag = false;
+	if((str) && (str[0] != '\0')) {
+	    if(arr_commands) {
+	        exec_command(arr_commands, count, &size, pos_separators);
 	    }
-	    flag = false;
-	    if((str) && (str[0] != '\0')) {
-		    if(arr_commands) {
-		        exec_command(arr_commands, count, &size, pos_separators);
-		    }
             count = 0;
-		    free(*pos_separators);
-    		*pos_separators = NULL;
-	    	size = 0;
+	    free(*pos_separators);
+            *pos_separators = NULL;
+  	    size = 0;
             i = 0;
-            while(arr_commands[i] != NULL) {
+	    while(arr_commands[i] != NULL) {
                 free(arr_commands[i]);
                 i++;
             }
-		    free(arr_commands); 
+	    free(arr_commands); 
             arr_commands = NULL;
-	    }
-        free(str);
 	}
+       free(str);
+    }
     free(pos_separators);
     putchar('\n');
     return 0;
