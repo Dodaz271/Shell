@@ -6,22 +6,6 @@
 #include "commands_execution.h"
 #include "editor.h"
 
-void free_all_alloc_mem(char *str, char ***arr_commands, int **pos_separators)
-{
-    free(*pos_separators);
-    free(pos_separators);
-    if(str != NULL) {
-        free(str);
-    }
-    if((*arr_commands) != NULL) {
-        for(int i = 0; (*arr_commands)[i] != NULL; i++) {
-            free((*arr_commands)[i]);
-        }
-        free((*arr_commands));
-    }
-    return;
-}
-
 void find_pgid_shell() 
 {
     int shell_pgid = getpid();
