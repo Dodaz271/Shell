@@ -367,7 +367,6 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
                             *amount = (*pos_separators)[*j] + 1;
                         }
                     }
-                    printf("amount = %d; count = %d\n", *amount, count);
                 } else if (WIFSIGNALED(status)) {
                     printf("Process %d was killed by signal %d\n", pid, WTERMSIG(status));
                 } else if (WIFSTOPPED(status)) {
@@ -453,7 +452,6 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
         if ((!pipe_flag) && (token)) {
             execute_single_command(token, input_flag, output_flag, &fd, is_ampersand, pipe_fd, &pipe_input, &j, pos_separators, arr_commands, &amount, count);
             if((pos_separators) && (*pos_separators)) {
-                printf("arr_commands[amount] = %s\n", arr_commands[amount-1]);
                 if((arr_commands[amount] != NULL) && (strcmp(arr_commands[amount-1], "||") != 0)/* && (strcmp(arr_commands[amount], "&&") != 0)*/) {
                     amount = i + 1; // Move to the next command
                 }
