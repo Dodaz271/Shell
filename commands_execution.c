@@ -225,8 +225,8 @@ void add_tokens(char ***token, int i, int **pos_separators, int *n, int j, char 
 }
 
 // Function to execute a single command with possible redirections and pipes
-void execute_single_command(char **token, bool input_flag, bool output_flag, int *fd, bool is_ampersand, int pipe_fd[2], int *pipe_input, int j, int **pos_separators, char **arr_commands) {
-    
+void execute_single_command(char **token, bool input_flag, bool output_flag, int *fd, bool is_ampersand, int pipe_fd[2], int *pipe_input, int *j, int **pos_separators, char **arr_commands, int *amount, int count) 
+{    
     struct sigaction sa;
     struct sigaction old_sa;
     int pid, p, rc, status, shell_pgid = getpgid(0);
@@ -234,8 +234,8 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
 
     // If output redirection is set and the previous separator was a pipe
     if ((*pos_separators) && (output_flag || input_flag) && 
-        ((*pos_separators)[j] != -1) && 
-        strcmp(arr_commands[(*pos_separators)[j]], "|") == 0) {
+        ((*pos_separators)[*j] != -1) && 
+        strcmp(arr_commands[(*pos_separators)[*j]], "|") == 0) {
 
         pipe(pipe_fd); // Create a new pipe
     }
@@ -261,7 +261,7 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
         // Handle output redirection
         if (output_flag) { 
             // If previous separator was a pipe
-            if ((strcmp(arr_commands[(*pos_separators)[j-2]], "|") == 0)) {
+            if ((strcmp(arr_commands[(*pos_separators)[(*j)-2]], "|") == 0)) {
                 if (*fd != -1) { // If file descriptor is valid
                     while((rc = read(*pipe_input, buf, sizeof(buf))) > 0) {
                         write(*fd, buf, rc);
@@ -281,8 +281,8 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
             dup2(*fd, 0); // Redirect standard input to the file
             close(*fd); // Close the original file descriptor
             // If the next separator is a pipe, redirect output to the pipe
-            if ((*pos_separators) && (*pos_separators)[j] != -1 && 
-                strcmp(arr_commands[(*pos_separators)[j]], "|") == 0) {
+            if ((*pos_separators) && (*pos_separators)[*j] != -1 && 
+                strcmp(arr_commands[(*pos_separators)[*j]], "|") == 0) {
        
                 close(pipe_fd[0]); // Close the read end of the pipe (not needed in child process)
                 dup2(pipe_fd[1], 1); // Redirect standard output to the write end of the pipe
@@ -312,8 +312,8 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
         // Parent process continues here
         // If previous separator was a pipe, close pipe ends in the parent
         if ((*pos_separators) && 
-            ((*pos_separators)[j] != -1) && 
-            (strcmp(arr_commands[(*pos_separators)[j]], "|") == 0)) {
+            ((*pos_separators)[*j] != -1) && 
+            (strcmp(arr_commands[(*pos_separators)[*j]], "|") == 0)) {
 
             close(pipe_fd[1]); // Close the writing end in the parent
             *pipe_input = pipe_fd[0]; // Optionally pass the reading end for the next command
@@ -325,7 +325,7 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
         if ((!is_ampersand) && 
             ((!(*pos_separators)) || 
              ((*pos_separators) && 
-              (strcmp(arr_commands[(*pos_separators)[j-2]], "|") != 0)))) {
+              (strcmp(arr_commands[(*pos_separators)[(*j)-2]], "|") != 0)))) {
             if(input_flag || output_flag) {
                 close(*fd); // Close the original file descriptor
                 *fd = -2;
@@ -347,6 +347,27 @@ void execute_single_command(char **token, bool input_flag, bool output_flag, int
             } else {
                 if (WIFEXITED(status)) {
                     printf("Process %d exited with status %d\n", pid, WEXITSTATUS(status));
+                    if((pos_separators) && (*pos_separators) && (strcmp(arr_commands[(*pos_separators)[(*j)-1]], "||") == 0) && (WEXITSTATUS(status) == 0)) {
+                        while((*pos_separators)[*j] != -1 && (strcmp(arr_commands[(*pos_separators)[*j]], "||") == 0)) {
+                            (*j)++;
+                        }
+                        if((*pos_separators)[*j] == -1) {
+                            *amount = count; 
+                        } else {
+                            *amount = (*pos_separators)[*j];
+                        }
+                    }
+                    if((pos_separators) && (*pos_separators) && (strcmp(arr_commands[(*pos_separators)[(*j)-1]], "&&") == 0) && (WEXITSTATUS(status) != 0)) {
+                        while((*pos_separators)[*j] != -1 && (strcmp(arr_commands[(*pos_separators)[*j]], "&&") == 0)) {
+                            (*j)++;
+                        }
+                        if((*pos_separators)[*j] == -1) {
+                            *amount = count; 
+                        } else {
+                            *amount = (*pos_separators)[*j] + 1;
+                        }
+                    }
+                    printf("amount = %d; count = %d\n", *amount, count);
                 } else if (WIFSIGNALED(status)) {
                     printf("Process %d was killed by signal %d\n", pid, WTERMSIG(status));
                 } else if (WIFSTOPPED(status)) {
@@ -387,6 +408,7 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
                 }
             }
             u = j;
+            //check if pipeline or redirecting streams must run like background proces
             while(((*pos_separators)[u] != -1) && ((strcmp(arr_commands[(*pos_separators)[u]], ">") == 0) || (strcmp(arr_commands[(*pos_separators)[u]], "<") == 0) || (strcmp(arr_commands[(*pos_separators)[u]], "|") == 0))) {
                 if(((*pos_separators)[u+1] != -1) && (strcmp(arr_commands[(*pos_separators)[u+1]], "&") == 0)) {
                     is_ampersand = true;
@@ -429,9 +451,12 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
 
         // If not a pipe, execute the single command
         if ((!pipe_flag) && (token)) {
-            execute_single_command(token, input_flag, output_flag, &fd, is_ampersand, pipe_fd, &pipe_input, j, pos_separators, arr_commands);
+            execute_single_command(token, input_flag, output_flag, &fd, is_ampersand, pipe_fd, &pipe_input, &j, pos_separators, arr_commands, &amount, count);
             if((pos_separators) && (*pos_separators)) {
-                amount = i + 1; // Move to the next command
+                printf("arr_commands[amount] = %s\n", arr_commands[amount-1]);
+                if((arr_commands[amount] != NULL) && (strcmp(arr_commands[amount-1], "||") != 0)/* && (strcmp(arr_commands[amount], "&&") != 0)*/) {
+                    amount = i + 1; // Move to the next command
+                }
                 if(strcmp(arr_commands[(*pos_separators)[j-1]], "<") == 0) {
                     amount++;
                 }
@@ -443,7 +468,7 @@ void exec_command(char **arr_commands, int count, int *size, int **pos_separator
             pipeline(pipe_fd, token, &pipe_input, arr_commands, pos_separators, j, is_ampersand, amount, fd, &pgid);
             close(pipe_fd[1]);
             // Handle specific cases where the pipe should be closed
-            if((((*pos_separators)[j] == -1) && (amount >= ((*pos_separators)[j-1]))) || (((*pos_separators)[j] != -1) && (strcmp(arr_commands[(*pos_separators)[j-1]], "|") != 0))) {
+            if((((*pos_separators)[j] == -1) && ((amount-1) > ((*pos_separators)[j-1]))) || (((*pos_separators)[j] != -1) && (strcmp(arr_commands[(*pos_separators)[j-1]], "|") != 0))) {
                 close(pipe_input); // Close the reading end of the pipe
                 pgid = -1;
                 amount = i+1; // Move to the next command
